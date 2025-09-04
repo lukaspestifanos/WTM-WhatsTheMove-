@@ -50,8 +50,6 @@ class TicketmasterService {
 
   constructor() {
     this.apiKey = process.env.TICKETMASTER_API_KEY || process.env.VITE_TICKETMASTER_API_KEY || "OatWZ5V1ZeIKi58oOAitKRTvlrcKr5NA";
-    console.log("Ticketmaster API Key status:", this.apiKey ? "Present" : "Missing");
-    console.log("Environment:", process.env.NODE_ENV);
     if (!this.apiKey) {
       console.warn("Ticketmaster API key not provided. Event search will be limited.");
     }
@@ -64,7 +62,6 @@ class TicketmasterService {
     options: SearchOptions = {}
   ) {
     if (!this.apiKey) {
-      console.error("No Ticketmaster API key available, returning empty results");
       return [];
     }
 
@@ -72,14 +69,16 @@ class TicketmasterService {
       // Set date range - concerts should show far in advance, parties more recent
       const now = new Date();
       // Use current UTC time to ensure we don't show past events
-      const startDate = options.startDate || now.toISOString();
+      // Remove milliseconds for Ticketmaster API (requires YYYY-MM-DDTHH:mm:ssZ format)
+      const startDate = options.startDate || now.toISOString().split('.')[0] + 'Z';
       
       let endDate = options.endDate;
       if (!endDate) {
         const months = options.category === 'concerts' ? 12 : 3; // 12 months for concerts, 3 for others
         const futureDate = new Date(now);
         futureDate.setMonth(futureDate.getMonth() + months);
-        endDate = futureDate.toISOString().split('T')[0];
+        futureDate.setHours(23, 59, 59, 0); // Set to 0 milliseconds
+        endDate = futureDate.toISOString().split('.')[0] + 'Z'; // Remove milliseconds
       }
 
       const params = new URLSearchParams({
@@ -90,7 +89,7 @@ class TicketmasterService {
         size: "100",
         sort: "date,asc",
         startDateTime: startDate.includes('T') ? startDate : `${startDate}T00:00:00Z`,
-        endDateTime: `${endDate}T23:59:59Z`,
+        endDateTime: endDate.includes('T') ? endDate : `${endDate}T23:59:59Z`,
       });
 
       if (options.keyword) {
@@ -117,14 +116,12 @@ class TicketmasterService {
       }
 
       const url = `${this.baseUrl}/events.json?${params}`;
-      console.log("Making Ticketmaster API request to:", url.replace(this.apiKey, '[API_KEY]'));
       
       const response = await fetch(url);
       
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`Ticketmaster API error: ${response.status} - ${response.statusText}`);
-        console.error(`Error details:`, errorText);
         throw new Error(`Ticketmaster API error: ${response.status} - ${errorText}`);
       }
 
