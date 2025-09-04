@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { authMiddleware as requireAuth } from "./middleware/auth";
 import authRoutes from "./routes/auth";
+import profileRoutes from "./routes/profile";
 import { insertEventSchema, insertRsvpSchema, insertFavoriteSchema } from "@shared/schema";
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -27,6 +28,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Auth routes
   app.use('/api', authRoutes);
+  
+  // Profile routes
+  app.use('/api/user', profileRoutes);
 
   // Events routes (public access)
   app.get("/api/events/search", async (req, res) => {

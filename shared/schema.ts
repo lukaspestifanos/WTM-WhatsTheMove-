@@ -23,6 +23,17 @@ export const users = pgTable("users", {
   university: varchar("university"),
   graduationYear: integer("graduation_year"),
   emailVerified: boolean("email_verified").default(false),
+  profileImageUrl: varchar("profile_image_url"),
+  bio: text("bio"),
+  instagramHandle: varchar("instagram_handle"),
+  twitterHandle: varchar("twitter_handle"),
+  isPublicProfile: boolean("is_public_profile").default(true),
+  friendsCount: integer("friends_count").default(0),
+  eventsHosted: integer("events_hosted").default(0),
+  eventsAttended: integer("events_attended").default(0),
+  referralCode: varchar("referral_code").unique(),
+  referredBy: uuid("referred_by"),
+  referralRewards: integer("referral_rewards").default(0), // Points for referring friends
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .defaultNow()
     .notNull(),
@@ -92,6 +103,45 @@ export const favorites = pgTable("favorites", {
     .notNull(),
 });
 
+// Friendships
+export const friendships = pgTable("friendships", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  friendId: uuid("friend_id").references(() => users.id).notNull(),
+  status: varchar("status").notNull().default("active"), // active, blocked
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+});
+
+// Friend Requests
+export const friendRequests = pgTable("friend_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  senderId: uuid("sender_id").references(() => users.id).notNull(),
+  receiverId: uuid("receiver_id").references(() => users.id).notNull(),
+  status: varchar("status").notNull().default("pending"), // pending, accepted, declined
+  message: text("message"), // Optional message with friend request
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+  respondedAt: timestamp("responded_at", { withTimezone: true, mode: "string" }),
+});
+
+// Event Invitations (for sharing events with friends)
+export const eventInvitations = pgTable("event_invitations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  eventId: uuid("event_id").references(() => events.id).notNull(),
+  senderId: uuid("sender_id").references(() => users.id).notNull(),
+  receiverId: uuid("receiver_id").references(() => users.id),
+  inviteeEmail: varchar("invitee_email"), // For inviting non-users
+  status: varchar("status").notNull().default("sent"), // sent, viewed, accepted, declined
+  personalMessage: text("personal_message"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+  respondedAt: timestamp("responded_at", { withTimezone: true, mode: "string" }),
+});
+
 // Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -123,6 +173,39 @@ export const insertFavoriteSchema = createInsertSchema(favorites).omit({
 });
 
 export const selectFavoriteSchema = createSelectSchema(favorites);
+
+export const insertFriendshipSchema = createInsertSchema(friendships).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const selectFriendshipSchema = createSelectSchema(friendships);
+
+export const insertFriendRequestSchema = createInsertSchema(friendRequests).omit({
+  id: true,
+  createdAt: true,
+  respondedAt: true,
+});
+
+export const selectFriendRequestSchema = createSelectSchema(friendRequests);
+
+export const insertEventInvitationSchema = createInsertSchema(eventInvitations).omit({
+  id: true,
+  createdAt: true,
+  respondedAt: true,
+});
+
+export const selectEventInvitationSchema = createSelectSchema(eventInvitations);
+
+// Type inference for the new schemas
+export type Friendship = typeof friendships.$inferSelect;
+export type InsertFriendship = z.infer<typeof insertFriendshipSchema>;
+
+export type FriendRequest = typeof friendRequests.$inferSelect;
+export type InsertFriendRequest = z.infer<typeof insertFriendRequestSchema>;
+
+export type EventInvitation = typeof eventInvitations.$inferSelect;
+export type InsertEventInvitation = z.infer<typeof insertEventInvitationSchema>;
 
 // Types
 export type User = typeof users.$inferSelect;

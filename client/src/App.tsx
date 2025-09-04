@@ -12,7 +12,9 @@ import CreateEvent from "@/pages/create-event";
 import EventDetails from "@/pages/event-details";
 import MyEvents from "@/pages/my-events";
 import Friends from "@/pages/friends";
+import EnhancedFriends from "@/pages/enhanced-friends";
 import Profile from "@/pages/profile";
+import EnhancedProfile from "@/pages/enhanced-profile";
 import AuthPage from "@/pages/auth";
 import PaymentPage from "@/pages/payment-page";
 import { useAuth } from "@/hooks/useAuth";
@@ -42,8 +44,8 @@ function Router() {
           <Route path="/create-event" component={CreateEvent} />
           <Route path="/payment-page" component={PaymentPage} />
           <Route path="/my-events" component={MyEvents} />
-          <Route path="/friends" component={Friends} />
-          <Route path="/profile" component={Profile} />
+          <Route path="/friends" component={EnhancedFriends} />
+          <Route path="/profile" component={EnhancedProfile} />
         </>
       ) : (
         /* Redirect non-authenticated users trying to access protected routes */

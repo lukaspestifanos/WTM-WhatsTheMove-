@@ -1,7 +1,8 @@
 import { 
-  users, events, rsvps, favorites,
+  users, events, rsvps, favorites, friendships, friendRequests,
   type User, type InsertUser, type Event, type InsertEvent, 
-  type Rsvp, type InsertRsvp, type Favorite, type InsertFavorite
+  type Rsvp, type InsertRsvp, type Favorite, type InsertFavorite,
+  type Friendship, type InsertFriendship, type FriendRequest, type InsertFriendRequest
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql } from "drizzle-orm";
@@ -12,6 +13,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: Partial<User>): Promise<User>;
   
   // Event operations
   searchEventsByLocation(lat: number, lng: number, radius: number, options: any): Promise<Event[]>;
@@ -27,9 +29,16 @@ export interface IStorage {
   // Favorite operations
   getUserFavorites(userId: string): Promise<Favorite[]>;
   addFavorite(favorite: InsertFavorite): Promise<Favorite>;
-  removeFavorite(userId: string, eventId: string): Promise<void>;
   removeFavorite(userId: string, eventId: string, externalSource?: string): Promise<void>;
   isFavorited(userId: string, eventId: string, externalSource?: string): Promise<boolean>;
+  
+  // Friend operations
+  getUserFriends(userId: string): Promise<User[]>;
+  sendFriendRequest(request: InsertFriendRequest): Promise<FriendRequest>;
+  acceptFriendRequest(requestId: string): Promise<void>;
+  declineFriendRequest(requestId: string): Promise<void>;
+  getFriendRequests(userId: string): Promise<FriendRequest[]>;
+  searchUsers(query: string, currentUserId: string): Promise<User[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -47,6 +56,15 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .insert(users)
       .values(userData)
+      .returning();
+    return user;
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, id))
       .returning();
     return user;
   }
@@ -164,6 +182,49 @@ export class DatabaseStorage implements IStorage {
     
     const [favorite] = await db.select().from(favorites).where(whereClause).limit(1);
     return !!favorite;
+  }
+
+  // Friend operations - Temporary implementations until database is updated
+  async getUserFriends(userId: string): Promise<User[]> {
+    // Return empty array until friendships table is created
+    return [];
+  }
+
+  async sendFriendRequest(request: InsertFriendRequest): Promise<FriendRequest> {
+    // Placeholder implementation
+    throw new Error("Friend requests feature requires database update");
+  }
+
+  async acceptFriendRequest(requestId: string): Promise<void> {
+    // Placeholder implementation
+    throw new Error("Friend requests feature requires database update");
+  }
+
+  async declineFriendRequest(requestId: string): Promise<void> {
+    // Placeholder implementation
+    throw new Error("Friend requests feature requires database update");
+  }
+
+  async getFriendRequests(userId: string): Promise<FriendRequest[]> {
+    // Return empty array until friend_requests table is created
+    return [];
+  }
+
+  async searchUsers(query: string, currentUserId: string): Promise<User[]> {
+    // Search users by name or email (excluding current user)
+    const searchQuery = `%${query.toLowerCase()}%`;
+    const matchingUsers = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          sql`LOWER(${users.firstName}) LIKE ${searchQuery} OR LOWER(${users.lastName}) LIKE ${searchQuery} OR LOWER(${users.email}) LIKE ${searchQuery}`,
+          sql`${users.id} != ${currentUserId}`
+        )
+      )
+      .limit(20);
+    
+    return matchingUsers;
   }
 }
 
