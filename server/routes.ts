@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, requireAuth } from "./auth";
 import { insertEventSchema, insertRsvpSchema, insertCommentSchema, insertMediaSchema } from "@shared/schema";
 import { ticketmasterService } from "./services/ticketmaster";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -16,19 +16,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
-  await setupAuth(app);
+  setupAuth(app);
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
+  // Auth routes are now handled in setupAuth() function in auth.ts
 
   // Events routes (public access)
   app.get("/api/events/search", async (req, res) => {
@@ -113,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create payment intent for event hosting fee
-  app.post("/api/create-event-payment", isAuthenticated, async (req: any, res) => {
+  app.post("/api/create-event-payment", requireAuth, async (req: any, res) => {
     try {
       const PLATFORM_FEE = 5.00; // $5 platform fee for hosting events
       
@@ -122,7 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currency: "usd",
         metadata: {
           type: "event_hosting_fee",
-          userId: req.user.claims.sub,
+          userId: req.user.id,
         },
       });
       
@@ -136,9 +126,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/events", isAuthenticated, async (req: any, res) => {
+  app.post("/api/events", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { stripePaymentIntentId, ...eventBody } = req.body;
       
       // Verify payment if paymentIntentId is provided
@@ -215,9 +205,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/events/:id/rsvp", isAuthenticated, async (req: any, res) => {
+  app.post("/api/events/:id/rsvp", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const rsvpData = insertRsvpSchema.parse({
         eventId: req.params.id,
         userId,
@@ -235,9 +225,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/user/events", isAuthenticated, async (req: any, res) => {
+  app.get("/api/user/events", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const events = await storage.getUserEvents(userId);
       res.json(events);
     } catch (error) {
@@ -284,9 +274,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/events/:id/comments", isAuthenticated, async (req: any, res) => {
+  app.post("/api/events/:id/comments", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const commentData = insertCommentSchema.parse({
         eventId: req.params.id,
         userId,
@@ -388,9 +378,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/media", isAuthenticated, async (req: any, res) => {
+  app.post("/api/media", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const { eventId, commentId, type, url, filename, fileSize } = req.body;
 
       const objectStorageService = new ObjectStorageService();

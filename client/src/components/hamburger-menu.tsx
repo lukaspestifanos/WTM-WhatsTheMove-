@@ -7,15 +7,20 @@ import type { User as UserType } from "@shared/schema";
 
 export function HamburgerMenu() {
   const [isOpen, setIsOpen] = useState(false);
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, logoutMutation } = useAuth();
   const typedUser = user as UserType | undefined;
 
   const handleLogin = () => {
-    window.location.href = "/api/login";
+    window.location.href = "/auth";
   };
 
-  const handleLogout = () => {
-    window.location.href = "/api/logout";
+  const handleLogout = async () => {
+    try {
+      await logoutMutation.mutateAsync();
+      setIsOpen(false);
+    } catch (error) {
+      // Error handling is done in the mutation
+    }
   };
 
   return (

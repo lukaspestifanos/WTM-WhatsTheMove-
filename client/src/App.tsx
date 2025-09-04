@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { HamburgerMenu } from "@/components/hamburger-menu";
-import { useAuth } from "@/hooks/useAuth";
+import { AuthProvider } from "@/hooks/useAuth";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Home from "@/pages/home";
@@ -13,16 +13,39 @@ import EventDetails from "@/pages/event-details";
 import MyEvents from "@/pages/my-events";
 import Friends from "@/pages/friends";
 import Profile from "@/pages/profile";
+import AuthPage from "@/pages/auth";
+import { useAuth } from "@/hooks/useAuth";
 
 function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" aria-label="Loading"/>
+      </div>
+    );
+  }
+
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/create-event" component={CreateEvent} />
-      <Route path="/events/:id" component={EventDetails} />
-      <Route path="/my-events" component={MyEvents} />
-      <Route path="/friends" component={Friends} />
-      <Route path="/profile" component={Profile} />
+      {/* Public routes */}
+      <Route path="/auth" component={AuthPage} />
+      
+      {/* Protected routes */}
+      {isAuthenticated ? (
+        <>
+          <Route path="/" component={Home} />
+          <Route path="/create-event" component={CreateEvent} />
+          <Route path="/events/:id" component={EventDetails} />
+          <Route path="/my-events" component={MyEvents} />
+          <Route path="/friends" component={Friends} />
+          <Route path="/profile" component={Profile} />
+        </>
+      ) : (
+        <Route path="/" component={Landing} />
+      )}
+      
       <Route component={NotFound} />
     </Switch>
   );
@@ -31,11 +54,13 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <HamburgerMenu />
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <HamburgerMenu />
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
