@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, requireAuth } from "./auth";
-import { insertEventSchema, insertRsvpSchema, insertCommentSchema, insertMediaSchema } from "@shared/schema";
+import { insertEventSchema, insertRsvpSchema, insertCommentSchema, insertMediaSchema, insertFavoriteSchema } from "@shared/schema";
 import { ticketmasterService } from "./services/ticketmaster";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import Stripe from "stripe";
@@ -83,7 +83,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Final safeguard: Filter out any past events that might have slipped through
       const now = new Date();
-      const filteredEvents = events.filter(event => {
+      let filteredEvents = events.filter(event => {
         try {
           const eventDate = new Date(event.startDate);
           return eventDate > now;
@@ -92,6 +92,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return false; // If date parsing fails, exclude the event
         }
       });
+
+      // For authenticated users, add favorite status and sort favorites first
+      if (req.user?.id) {
+        const userId = req.user.id;
+        
+        // Add favorite status to each event
+        const eventsWithFavorites = await Promise.all(
+          filteredEvents.map(async (event) => {
+            const isFavorited = await storage.isFavorited(
+              userId, 
+              event.id, 
+              event.externalSource
+            );
+            return {
+              ...event,
+              isFavorited
+            };
+          })
+        );
+        
+        // Sort favorites first, then by start date
+        eventsWithFavorites.sort((a, b) => {
+          // Favorites first
+          if (a.isFavorited && !b.isFavorited) return -1;
+          if (!a.isFavorited && b.isFavorited) return 1;
+          
+          // Then by start date
+          return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+        });
+        
+        filteredEvents = eventsWithFavorites;
+      }
 
       console.log(`Total events found: ${events.length}`);
       console.log(`Events after filtering past dates: ${filteredEvents.length}`);
@@ -417,6 +449,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid media data", errors: (error as any).errors });
       }
       res.status(500).json({ message: "Failed to create media" });
+    }
+  });
+
+  // Favorites endpoints
+  app.post("/api/events/:id/favorite", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const eventId = req.params.id;
+      const { externalSource } = req.body;
+      
+      const favoriteData = insertFavoriteSchema.parse({
+        userId,
+        eventId,
+        externalSource,
+      });
+      
+      const favorite = await storage.addFavorite(favoriteData);
+      res.json(favorite);
+    } catch (error) {
+      console.error("Error adding favorite:", error);
+      if (error && typeof error === 'object' && 'name' in error && error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid favorite data", errors: (error as any).errors });
+      }
+      res.status(500).json({ message: "Failed to add favorite" });
+    }
+  });
+
+  app.delete("/api/events/:id/favorite", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const eventId = req.params.id;
+      const { externalSource } = req.query;
+      
+      await storage.removeFavorite(userId, eventId, externalSource as string);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error removing favorite:", error);
+      res.status(500).json({ message: "Failed to remove favorite" });
+    }
+  });
+
+  app.get("/api/user/favorites", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const favorites = await storage.getUserFavorites(userId);
+      res.json(favorites);
+    } catch (error) {
+      console.error("Error fetching user favorites:", error);
+      res.status(500).json({ message: "Failed to fetch favorites" });
     }
   });
 

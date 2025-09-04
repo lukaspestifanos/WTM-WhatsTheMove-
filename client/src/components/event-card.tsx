@@ -6,7 +6,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { Send } from "lucide-react";
+import { Send, Heart } from "lucide-react";
 
 interface Event {
   id: string;
@@ -24,6 +24,7 @@ interface Event {
   attendeeCount?: number;
   externalSource?: string;
   url?: string;
+  isFavorited?: boolean;
 }
 
 interface EventCardProps {
@@ -47,9 +48,84 @@ function formatPriceDisplay(event: Event, buttonPrefix: string): string {
 }
 
 export default function EventCard({ event, onEventClick }: EventCardProps) {
-  const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Favorite mutation
+  const favoriteMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", `/api/events/${event.id}/favorite`, {
+        externalSource: event.externalSource,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events/search"] });
+      toast({
+        title: "Added to favorites",
+        description: `${event.title} has been added to your favorites`,
+      });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Please sign in",
+          description: "You need to be signed in to favorite events",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to add to favorites",
+          variant: "destructive",
+        });
+      }
+    }
+  });
+
+  // Unfavorite mutation
+  const unfavoriteMutation = useMutation({
+    mutationFn: async () => {
+      const params = new URLSearchParams();
+      if (event.externalSource) {
+        params.append('externalSource', event.externalSource);
+      }
+      await apiRequest("DELETE", `/api/events/${event.id}/favorite?${params}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events/search"] });
+      toast({
+        title: "Removed from favorites",
+        description: `${event.title} has been removed from your favorites`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to remove from favorites",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleFavoriteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) {
+      toast({
+        title: "Please sign in",
+        description: "You need to be signed in to favorite events",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (event.isFavorited) {
+      unfavoriteMutation.mutate();
+    } else {
+      favoriteMutation.mutate();
+    }
+  };
 
   const getCategoryColor = (category: string) => {
     const colors = {
@@ -284,14 +360,33 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
             formatPriceDisplay(event, "RSVP")
           )}
         </Button>
-        <Button 
-          onClick={handleShare}
-          variant="secondary"
-          className="w-12 h-12 rounded-xl flex items-center justify-center"
-          data-testid={`button-share-${event.id}`}
-        >
-          <Send className="w-4 h-4" />
-        </Button>
+        <div className="flex space-x-2">
+          {user && (
+            <Button
+              onClick={handleFavoriteClick}
+              variant="secondary"
+              disabled={favoriteMutation.isPending || unfavoriteMutation.isPending}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                event.isFavorited 
+                  ? 'bg-red-100 hover:bg-red-200 text-red-600 border-red-200' 
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-600 border-gray-200'
+              }`}
+              data-testid={`button-favorite-${event.id}`}
+            >
+              <Heart 
+                className={`w-4 h-4 ${event.isFavorited ? 'fill-current' : ''}`} 
+              />
+            </Button>
+          )}
+          <Button 
+            onClick={handleShare}
+            variant="secondary"
+            className="w-12 h-12 rounded-xl flex items-center justify-center"
+            data-testid={`button-share-${event.id}`}
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
     </Card>
   );

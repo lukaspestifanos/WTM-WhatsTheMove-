@@ -31,6 +31,7 @@ interface Event {
   attendeeCount?: number;
   externalSource?: string;
   url?: string;
+  isFavorited?: boolean;
 }
 
 export default function Home() {

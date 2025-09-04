@@ -105,6 +105,14 @@ export const media = pgTable("media", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const favorites = pgTable("favorites", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  eventId: varchar("event_id").notNull(), // Can be external event ID
+  externalSource: varchar("external_source"), // 'ticketmaster', 'meetup', 'user'
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertEventSchema = createInsertSchema(events).omit({
   id: true,
@@ -123,6 +131,11 @@ export const insertCommentSchema = createInsertSchema(comments).omit({
 });
 
 export const insertMediaSchema = createInsertSchema(media).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertFavoriteSchema = createInsertSchema(favorites).omit({
   id: true,
   createdAt: true,
 });
@@ -151,3 +164,5 @@ export type Comment = typeof comments.$inferSelect;
 export type InsertComment = z.infer<typeof insertCommentSchema>;
 export type Media = typeof media.$inferSelect;
 export type InsertMedia = z.infer<typeof insertMediaSchema>;
+export type Favorite = typeof favorites.$inferSelect;
+export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;

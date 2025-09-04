@@ -1,8 +1,8 @@
 import { 
-  users, events, rsvps, comments, media,
+  users, events, rsvps, comments, media, favorites,
   type User, type InsertUser, type Event, type InsertEvent, 
   type Rsvp, type InsertRsvp, type Comment, type InsertComment,
-  type Media, type InsertMedia 
+  type Media, type InsertMedia, type Favorite, type InsertFavorite
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql } from "drizzle-orm";
@@ -33,6 +33,12 @@ export interface IStorage {
   getEventMedia(eventId: string): Promise<Media[]>;
   getCommentMedia(commentId: string): Promise<Media[]>;
   createMedia(media: InsertMedia): Promise<Media>;
+  
+  // Favorites operations
+  getUserFavorites(userId: string): Promise<Favorite[]>;
+  addFavorite(favorite: InsertFavorite): Promise<Favorite>;
+  removeFavorite(userId: string, eventId: string, externalSource?: string): Promise<void>;
+  isFavorited(userId: string, eventId: string, externalSource?: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -154,6 +160,46 @@ export class DatabaseStorage implements IStorage {
       .values(mediaData)
       .returning();
     return mediaRecord;
+  }
+
+  async getUserFavorites(userId: string): Promise<Favorite[]> {
+    return await db.select().from(favorites).where(eq(favorites.userId, userId));
+  }
+
+  async addFavorite(favoriteData: InsertFavorite): Promise<Favorite> {
+    const [favorite] = await db
+      .insert(favorites)
+      .values(favoriteData)
+      .onConflictDoNothing()
+      .returning();
+    return favorite;
+  }
+
+  async removeFavorite(userId: string, eventId: string, externalSource?: string): Promise<void> {
+    let whereClause = and(
+      eq(favorites.userId, userId),
+      eq(favorites.eventId, eventId)
+    );
+    
+    if (externalSource) {
+      whereClause = and(whereClause, eq(favorites.externalSource, externalSource));
+    }
+    
+    await db.delete(favorites).where(whereClause);
+  }
+
+  async isFavorited(userId: string, eventId: string, externalSource?: string): Promise<boolean> {
+    let whereClause = and(
+      eq(favorites.userId, userId),
+      eq(favorites.eventId, eventId)
+    );
+    
+    if (externalSource) {
+      whereClause = and(whereClause, eq(favorites.externalSource, externalSource));
+    }
+    
+    const [favorite] = await db.select().from(favorites).where(whereClause).limit(1);
+    return !!favorite;
   }
 }
 
