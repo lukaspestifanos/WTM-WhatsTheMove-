@@ -2,9 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertEventSchema, insertRsvpSchema } from "@shared/schema";
+import { insertEventSchema, insertRsvpSchema, insertCommentSchema, insertMediaSchema } from "@shared/schema";
 import { ticketmasterService } from "./services/ticketmaster";
-import { meetupService } from "./services/meetup";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -51,22 +51,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Ticketmaster API error:", error);
         }
 
-        // Meetup events
-        try {
-          const meetupEvents = await meetupService.searchEventsByLocation(
-            parseFloat(lat as string),
-            parseFloat(lng as string),
-            parseInt(radius as string),
-            {
-              keyword: keyword as string,
-              startDate: startDate as string,
-              endDate: endDate as string,
-            }
-          );
-          events.push(...meetupEvents);
-        } catch (error) {
-          console.error("Meetup API error:", error);
-        }
+        // Meetup events (disabled for now)
+        // try {
+        //   const meetupEvents = await meetupService.searchEventsByLocation(
+        //     parseFloat(lat as string),
+        //     parseFloat(lng as string),
+        //     parseInt(radius as string),
+        //     {
+        //       keyword: keyword as string,
+        //       startDate: startDate as string,
+        //       endDate: endDate as string,
+        //     }
+        //   );
+        //   events.push(...meetupEvents);
+        // } catch (error) {
+        //   console.error("Meetup API error:", error);
+        // }
 
         // User-generated events
         const userEvents = await storage.searchEventsByLocation(
@@ -133,6 +133,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Guest RSVP route (no authentication required)
+  app.post("/api/events/:id/rsvp/guest", async (req, res) => {
+    try {
+      const { guestName, guestEmail, guestAddress, status } = req.body;
+      
+      if (!guestName || !guestEmail) {
+        return res.status(400).json({ message: "Guest name and email are required" });
+      }
+
+      const rsvpData = insertRsvpSchema.parse({
+        eventId: req.params.id,
+        guestName,
+        guestEmail,
+        guestAddress,
+        status: status || "attending",
+      });
+      
+      const rsvp = await storage.createGuestRsvp(rsvpData);
+      res.json(rsvp);
+    } catch (error) {
+      console.error("Error creating guest RSVP:", error);
+      if (error && typeof error === 'object' && 'name' in error && error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid RSVP data", errors: (error as any).errors });
+      }
+      res.status(500).json({ message: "Failed to create guest RSVP" });
+    }
+  });
+
   app.post("/api/events/:id/rsvp", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -161,6 +189,177 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user events:", error);
       res.status(500).json({ message: "Failed to fetch user events" });
+    }
+  });
+
+  // Comments routes
+  app.get("/api/events/:id/comments", async (req, res) => {
+    try {
+      const comments = await storage.getEventComments(req.params.id);
+      res.json(comments);
+    } catch (error) {
+      console.error("Error fetching comments:", error);
+      res.status(500).json({ message: "Failed to fetch comments" });
+    }
+  });
+
+  // Guest comment route (no authentication required)
+  app.post("/api/events/:id/comments/guest", async (req, res) => {
+    try {
+      const { guestName, guestEmail, content } = req.body;
+      
+      if (!guestName || !guestEmail || !content) {
+        return res.status(400).json({ message: "Guest name, email, and content are required" });
+      }
+
+      const commentData = insertCommentSchema.parse({
+        eventId: req.params.id,
+        guestName,
+        guestEmail,
+        content,
+      });
+      
+      const comment = await storage.createComment(commentData);
+      res.json(comment);
+    } catch (error) {
+      console.error("Error creating guest comment:", error);
+      if (error && typeof error === 'object' && 'name' in error && error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid comment data", errors: (error as any).errors });
+      }
+      res.status(500).json({ message: "Failed to create guest comment" });
+    }
+  });
+
+  app.post("/api/events/:id/comments", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const commentData = insertCommentSchema.parse({
+        eventId: req.params.id,
+        userId,
+        content: req.body.content,
+      });
+      
+      const comment = await storage.createComment(commentData);
+      res.json(comment);
+    } catch (error) {
+      console.error("Error creating comment:", error);
+      if (error && typeof error === 'object' && 'name' in error && error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid comment data", errors: (error as any).errors });
+      }
+      res.status(500).json({ message: "Failed to create comment" });
+    }
+  });
+
+  // Media routes
+  app.get("/api/events/:id/media", async (req, res) => {
+    try {
+      const media = await storage.getEventMedia(req.params.id);
+      res.json(media);
+    } catch (error) {
+      console.error("Error fetching event media:", error);
+      res.status(500).json({ message: "Failed to fetch event media" });
+    }
+  });
+
+  app.get("/api/comments/:id/media", async (req, res) => {
+    try {
+      const media = await storage.getCommentMedia(req.params.id);
+      res.json(media);
+    } catch (error) {
+      console.error("Error fetching comment media:", error);
+      res.status(500).json({ message: "Failed to fetch comment media" });
+    }
+  });
+
+  // Object storage routes for media uploads
+  app.post("/api/objects/upload", async (req, res) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Error getting upload URL:", error);
+      res.status(500).json({ message: "Failed to get upload URL" });
+    }
+  });
+
+  // Serve uploaded objects
+  app.get("/objects/:objectPath(*)", async (req, res) => {
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(
+        req.path,
+      );
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error checking object access:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
+  // Guest media upload route (no authentication required)
+  app.post("/api/media/guest", async (req, res) => {
+    try {
+      const { guestName, guestEmail, eventId, commentId, type, url, filename, fileSize } = req.body;
+      
+      if (!guestName || !guestEmail || !type || !url) {
+        return res.status(400).json({ message: "Guest name, email, type, and URL are required" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const normalizedUrl = objectStorageService.normalizeObjectEntityPath(url);
+
+      const mediaData = insertMediaSchema.parse({
+        eventId,
+        commentId,
+        guestName,
+        guestEmail,
+        type,
+        url: normalizedUrl,
+        filename,
+        fileSize,
+      });
+      
+      const media = await storage.createMedia(mediaData);
+      res.json(media);
+    } catch (error) {
+      console.error("Error creating guest media:", error);
+      if (error && typeof error === 'object' && 'name' in error && error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid media data", errors: (error as any).errors });
+      }
+      res.status(500).json({ message: "Failed to create guest media" });
+    }
+  });
+
+  app.post("/api/media", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { eventId, commentId, type, url, filename, fileSize } = req.body;
+
+      const objectStorageService = new ObjectStorageService();
+      const normalizedUrl = objectStorageService.normalizeObjectEntityPath(url);
+
+      const mediaData = insertMediaSchema.parse({
+        eventId,
+        commentId,
+        userId,
+        type,
+        url: normalizedUrl,
+        filename,
+        fileSize,
+      });
+      
+      const media = await storage.createMedia(mediaData);
+      res.json(media);
+    } catch (error) {
+      console.error("Error creating media:", error);
+      if (error && typeof error === 'object' && 'name' in error && error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid media data", errors: (error as any).errors });
+      }
+      res.status(500).json({ message: "Failed to create media" });
     }
   });
 

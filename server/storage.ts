@@ -1,4 +1,9 @@
-import { users, events, rsvps, type User, type UpsertUser, type Event, type InsertEvent, type Rsvp, type InsertRsvp } from "@shared/schema";
+import { 
+  users, events, rsvps, comments, media,
+  type User, type UpsertUser, type Event, type InsertEvent, 
+  type Rsvp, type InsertRsvp, type Comment, type InsertComment,
+  type Media, type InsertMedia 
+} from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql } from "drizzle-orm";
 
@@ -16,7 +21,17 @@ export interface IStorage {
   
   // RSVP operations
   getEventRsvps(eventId: string): Promise<Rsvp[]>;
+  createGuestRsvp(rsvp: InsertRsvp): Promise<Rsvp>;
   createOrUpdateRsvp(rsvp: InsertRsvp): Promise<Rsvp>;
+  
+  // Comment operations
+  getEventComments(eventId: string): Promise<Comment[]>;
+  createComment(comment: InsertComment): Promise<Comment>;
+  
+  // Media operations
+  getEventMedia(eventId: string): Promise<Media[]>;
+  getCommentMedia(commentId: string): Promise<Media[]>;
+  createMedia(media: InsertMedia): Promise<Media>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -73,7 +88,21 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(rsvps).where(eq(rsvps.eventId, eventId));
   }
 
+  async createGuestRsvp(rsvpData: InsertRsvp): Promise<Rsvp> {
+    // For guest RSVPs, just insert without conflict resolution
+    const [rsvp] = await db
+      .insert(rsvps)
+      .values(rsvpData)
+      .returning();
+    return rsvp;
+  }
+
   async createOrUpdateRsvp(rsvpData: InsertRsvp): Promise<Rsvp> {
+    // For user RSVPs with userId
+    if (!rsvpData.userId) {
+      return this.createGuestRsvp(rsvpData);
+    }
+    
     const [rsvp] = await db
       .insert(rsvps)
       .values(rsvpData)
@@ -85,6 +114,34 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return rsvp;
+  }
+
+  async getEventComments(eventId: string): Promise<Comment[]> {
+    return await db.select().from(comments).where(eq(comments.eventId, eventId));
+  }
+
+  async createComment(commentData: InsertComment): Promise<Comment> {
+    const [comment] = await db
+      .insert(comments)
+      .values(commentData)
+      .returning();
+    return comment;
+  }
+
+  async getEventMedia(eventId: string): Promise<Media[]> {
+    return await db.select().from(media).where(eq(media.eventId, eventId));
+  }
+
+  async getCommentMedia(commentId: string): Promise<Media[]> {
+    return await db.select().from(media).where(eq(media.commentId, commentId));
+  }
+
+  async createMedia(mediaData: InsertMedia): Promise<Media> {
+    const [mediaRecord] = await db
+      .insert(media)
+      .values(mediaData)
+      .returning();
+    return mediaRecord;
   }
 }
 

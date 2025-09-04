@@ -65,8 +65,37 @@ export const events = pgTable("events", {
 export const rsvps = pgTable("rsvps", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   eventId: varchar("event_id").references(() => events.id).notNull(),
-  userId: varchar("user_id").references(() => users.id).notNull(),
+  userId: varchar("user_id").references(() => users.id), // Nullable for guest RSVPs
   status: varchar("status").notNull().default("attending"), // 'attending', 'maybe', 'not_attending'
+  // Guest RSVP fields
+  guestName: varchar("guest_name"),
+  guestEmail: varchar("guest_email"),
+  guestAddress: varchar("guest_address"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const comments = pgTable("comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").references(() => events.id).notNull(),
+  userId: varchar("user_id").references(() => users.id), // Nullable for guest comments
+  // Guest comment fields
+  guestName: varchar("guest_name"),
+  guestEmail: varchar("guest_email"),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const media = pgTable("media", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").references(() => events.id),
+  commentId: varchar("comment_id").references(() => comments.id),
+  userId: varchar("user_id").references(() => users.id), // Nullable for guest uploads
+  guestName: varchar("guest_name"),
+  guestEmail: varchar("guest_email"),
+  type: varchar("type").notNull(), // 'image', 'video'
+  url: varchar("url").notNull(),
+  filename: varchar("filename"),
+  fileSize: integer("file_size"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -82,6 +111,16 @@ export const insertRsvpSchema = createInsertSchema(rsvps).omit({
   createdAt: true,
 });
 
+export const insertCommentSchema = createInsertSchema(comments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMediaSchema = createInsertSchema(media).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -89,3 +128,7 @@ export type Event = typeof events.$inferSelect;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
 export type Rsvp = typeof rsvps.$inferSelect;
 export type InsertRsvp = z.infer<typeof insertRsvpSchema>;
+export type Comment = typeof comments.$inferSelect;
+export type InsertComment = z.infer<typeof insertCommentSchema>;
+export type Media = typeof media.$inferSelect;
+export type InsertMedia = z.infer<typeof insertMediaSchema>;
