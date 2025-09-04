@@ -130,8 +130,29 @@ class TicketmasterService {
 
   private transformEvent(event: TicketmasterEvent) {
     const venue = event._embedded?.venues?.[0];
-    const priceRange = event.priceRanges?.[0];
     const image = event.images?.find(img => img.width >= 300)?.url || event.images?.[0]?.url;
+    
+    // Enhanced price extraction logic
+    let price = 0;
+    if (event.priceRanges && event.priceRanges.length > 0) {
+      // Look through all price ranges to find the best pricing info
+      const validPrices = event.priceRanges
+        .filter(range => range.min && range.min > 0)
+        .map(range => range.min);
+      
+      if (validPrices.length > 0) {
+        price = Math.min(...validPrices); // Use the lowest available price
+      }
+    }
+    
+    // If no price ranges, check for other pricing fields that might be available
+    if (price === 0 && event.accessibility?.info?.includes('$')) {
+      // Sometimes pricing info is in accessibility info
+      const priceMatch = event.accessibility.info.match(/\$(\d+(?:\.\d{2})?)/);
+      if (priceMatch) {
+        price = parseFloat(priceMatch[1]);
+      }
+    }
 
     return {
       id: event.id,
@@ -142,7 +163,7 @@ class TicketmasterService {
       location: venue?.name || "TBA",
       latitude: venue?.location?.latitude ? parseFloat(venue.location.latitude) : null,
       longitude: venue?.location?.longitude ? parseFloat(venue.location.longitude) : null,
-      price: priceRange?.min || 0,
+      price: price,
       imageUrl: image,
       externalId: event.id,
       externalSource: "ticketmaster",

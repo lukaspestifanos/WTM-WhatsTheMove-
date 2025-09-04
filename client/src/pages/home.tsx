@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useLocation } from "wouter";
+import { Plus } from "lucide-react";
 
 interface Event {
   id: string;
@@ -238,7 +239,7 @@ export default function Home() {
         className="fixed bottom-20 right-4 w-16 h-16 bg-primary text-primary-foreground rounded-2xl shadow-xl p-0 text-xl z-30"
         data-testid="button-create-event"
       >
-        <i className="fas fa-plus"></i>
+        <Plus className="w-6 h-6" />
       </Button>
 
       {/* Bottom Navigation */}

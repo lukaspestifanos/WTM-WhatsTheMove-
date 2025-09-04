@@ -6,6 +6,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { Send } from "lucide-react";
 
 interface Event {
   id: string;
@@ -237,7 +238,7 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
           className="w-12 h-12 rounded-xl flex items-center justify-center"
           data-testid={`button-share-${event.id}`}
         >
-          <i className="fas fa-share-alt"></i>
+          <Send className="w-4 h-4" />
         </Button>
       </div>
     </Card>
