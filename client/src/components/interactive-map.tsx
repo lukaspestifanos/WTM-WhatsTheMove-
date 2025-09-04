@@ -75,9 +75,9 @@ export default function InteractiveMap({ userLocation, events, onEventClick }: I
     const userIcon = L.divIcon({
       className: 'user-location-marker',
       html: `<div class="relative">
-               <div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>
-               <div class="absolute inset-0 w-4 h-4 bg-blue-400 rounded-full animate-ping opacity-75"></div>
-               <div class="absolute inset-0.5 w-3 h-3 bg-blue-600 rounded-full"></div>
+               <div class="w-4 h-4 bg-blue-300 rounded-full border border-white shadow-lg"></div>
+               <div class="absolute inset-0 w-4 h-4 bg-blue-200 rounded-full animate-ping opacity-60"></div>
+               <div class="absolute inset-0.5 w-3 h-3 bg-blue-600 rounded-full border border-white"></div>
              </div>`,
       iconSize: [16, 16],
       iconAnchor: [8, 8],
