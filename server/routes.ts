@@ -81,8 +81,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         events.push(...userEvents);
       }
 
+      // Final safeguard: Filter out any past events that might have slipped through
+      const now = new Date();
+      const filteredEvents = events.filter(event => {
+        try {
+          const eventDate = new Date(event.startDate);
+          return eventDate > now;
+        } catch (error) {
+          console.warn(`Invalid date format for event ${event.id}: ${event.startDate}`);
+          return false; // If date parsing fails, exclude the event
+        }
+      });
+
       console.log(`Total events found: ${events.length}`);
-      res.json({ events });
+      console.log(`Events after filtering past dates: ${filteredEvents.length}`);
+      res.json({ events: filteredEvents });
     } catch (error) {
       console.error("Error searching events:", error);
       res.status(500).json({ message: "Failed to search events" });

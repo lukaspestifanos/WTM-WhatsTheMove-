@@ -63,7 +63,20 @@ export class DatabaseStorage implements IStorage {
     }
     
     const allEvents = await query;
-    return allEvents;
+    
+    // Filter out past events
+    const now = new Date();
+    const futureEvents = allEvents.filter(event => {
+      try {
+        const eventDate = new Date(event.startDate);
+        return eventDate > now;
+      } catch (error) {
+        console.warn(`Invalid date format for user event ${event.id}: ${event.startDate}`);
+        return false;
+      }
+    });
+    
+    return futureEvents;
   }
 
   async getEvent(id: string): Promise<Event | undefined> {

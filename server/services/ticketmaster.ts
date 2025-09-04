@@ -68,7 +68,8 @@ class TicketmasterService {
     try {
       // Set date range - concerts should show far in advance, parties more recent
       const now = new Date();
-      const startDate = options.startDate || now.toISOString().split('T')[0];
+      // Use current UTC time to ensure we don't show past events
+      const startDate = options.startDate || now.toISOString();
       
       let endDate = options.endDate;
       if (!endDate) {
@@ -85,7 +86,7 @@ class TicketmasterService {
         unit: "miles",
         size: "100",
         sort: "date,asc",
-        startDateTime: `${startDate}T00:00:00Z`,
+        startDateTime: startDate.includes('T') ? startDate : `${startDate}T00:00:00Z`,
         endDateTime: `${endDate}T23:59:59Z`,
       });
 
