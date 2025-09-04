@@ -151,12 +151,21 @@ export default function CreateEvent() {
     console.log("Form validation passed, submitting:", data);
 
     try {
-      await createEventMutation.mutateAsync(data);
+      // Always require payment for event hosting ($5 platform fee)
+      // Store event data and redirect to payment
+      sessionStorage.setItem('pendingEventData', JSON.stringify(data));
+      sessionStorage.setItem('pendingEventFlow', 'create');
+      
+      // Redirect to payment page for platform fee
+      setLocation('/payment-page');
     } catch (error) {
-      // Error is handled in onError
       console.error("Submission error:", error);
-    } finally {
       setIsSubmitting(false);
+      toast({
+        title: "Error",
+        description: "Failed to initiate payment flow",
+        variant: "destructive",
+      });
     }
   };
 

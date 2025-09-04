@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { storage } from '../storage';
-import { loginSchema, registerSchema } from '@shared/schema';
+import { insertUserSchema } from '@shared/schema';
 import { authMiddleware } from '../middleware/auth';
 
 const router = express.Router();

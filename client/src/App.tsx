@@ -14,6 +14,7 @@ import MyEvents from "@/pages/my-events";
 import Friends from "@/pages/friends";
 import Profile from "@/pages/profile";
 import AuthPage from "@/pages/auth";
+import PaymentPage from "@/pages/payment-page";
 import { useAuth } from "@/hooks/useAuth";
 
 function Router() {
@@ -39,6 +40,7 @@ function Router() {
       {user ? (
         <>
           <Route path="/create-event" component={CreateEvent} />
+          <Route path="/payment-page" component={PaymentPage} />
           <Route path="/my-events" component={MyEvents} />
           <Route path="/friends" component={Friends} />
           <Route path="/profile" component={Profile} />

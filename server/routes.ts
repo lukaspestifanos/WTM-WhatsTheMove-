@@ -165,7 +165,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currency: "usd",
         metadata: {
           type: "event_hosting_fee",
-          userId: req.user.id,
+          userId: (req as any).userId,
         },
       });
       
@@ -181,7 +181,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/events", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req as any).userId;
       const { stripePaymentIntentId, ...eventBody } = req.body;
       
       // Verify payment if paymentIntentId is provided
@@ -269,7 +269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/events/:id/rsvp", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req as any).userId;
       const rsvpData = insertRsvpSchema.parse({
         eventId: req.params.id,
         userId,
@@ -289,7 +289,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/user/events", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req as any).userId;
       const events = await storage.getUserEvents(userId);
       res.json(events);
     } catch (error) {
@@ -338,7 +338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/events/:id/comments", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req as any).userId;
       const commentData = insertCommentSchema.parse({
         eventId: req.params.id,
         userId,
@@ -442,7 +442,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/media", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req as any).userId;
       const { eventId, commentId, type, url, filename, fileSize } = req.body;
 
       const objectStorageService = new ObjectStorageService();
@@ -472,7 +472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Favorites endpoints
   app.post("/api/events/:id/favorite", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req as any).userId;
       const eventId = req.params.id;
       const { externalSource } = req.body;
       
@@ -495,7 +495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/events/:id/favorite", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req as any).userId;
       const eventId = req.params.id;
       const { externalSource } = req.query;
       
@@ -509,7 +509,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/user/favorites", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.id;
+      const userId = (req as any).userId;
       const favorites = await storage.getUserFavorites(userId);
       res.json(favorites);
     } catch (error) {
