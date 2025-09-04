@@ -1,33 +1,21 @@
-import { sql } from 'drizzle-orm';
+import { sql } from "drizzle-orm";
 import {
-  index,
-  jsonb,
   pgTable,
-  timestamp,
   varchar,
   text,
-  real,
+  timestamp,
+  uuid,
   integer,
   boolean,
-  uuid,
+  numeric,
+  real,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Session storage table for custom authentication
-export const sessions = pgTable(
-  "sessions",
-  {
-    sid: varchar("sid").primaryKey(),
-    sess: jsonb("sess").notNull(),
-    expire: timestamp("expire").notNull(),
-  },
-  (table) => [index("IDX_session_expire").on(table.expire)],
-);
-
-// User storage table for JWT authentication.
+// Users
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email").notNull().unique(),
   password: varchar("password").notNull(),
   firstName: varchar("first_name").notNull(),
@@ -35,146 +23,116 @@ export const users = pgTable("users", {
   university: varchar("university"),
   graduationYear: integer("graduation_year"),
   emailVerified: boolean("email_verified").default(false),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
 });
 
+// Events
 export const events = pgTable("events", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid("id").primaryKey().defaultRandom(),
   title: varchar("title").notNull(),
   description: text("description"),
   category: varchar("category").notNull(),
-  startDate: timestamp("start_date").notNull(),
-  endDate: timestamp("end_date"),
+  startDate: timestamp("start_date", { withTimezone: true, mode: "string" })
+    .notNull(),
+  endDate: timestamp("end_date", { withTimezone: true, mode: "string" }),
   location: varchar("location").notNull(),
   latitude: real("latitude"),
   longitude: real("longitude"),
-  hostId: varchar("host_id").references(() => users.id),
+  hostId: uuid("host_id").references(() => users.id),
   maxAttendees: integer("max_attendees"),
-  price: real("price").default(0),
-  minPrice: real("min_price").default(0),
-  maxPrice: real("max_price").default(0),
+  price: numeric("price", { precision: 10, scale: 2 }).default("0"),
+  minPrice: numeric("min_price", { precision: 10, scale: 2 }).default("0"),
+  maxPrice: numeric("max_price", { precision: 10, scale: 2 }).default("0"),
   isPublic: boolean("is_public").default(true),
-  externalId: varchar("external_id"), // For Ticketmaster/Meetup events
-  externalSource: varchar("external_source"), // 'ticketmaster', 'meetup', 'user'
+  externalId: varchar("external_id"),
+  externalSource: varchar("external_source"),
   imageUrl: varchar("image_url"),
   venueId: varchar("venue_id"),
   venueName: varchar("venue_name"),
-  // Payment fields for monetization
-  platformFee: real("platform_fee").default(0), // Fee charged to host
-  isPaid: boolean("is_paid").default(false), // Whether host paid the platform fee
-  stripePaymentIntentId: varchar("stripe_payment_intent_id"), // Stripe payment reference
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  platformFee: numeric("platform_fee", { precision: 10, scale: 2 }).default("0"),
+  isPaid: boolean("is_paid").default(false),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
 });
 
+// RSVPs
 export const rsvps = pgTable("rsvps", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  eventId: varchar("event_id").references(() => events.id).notNull(),
-  userId: varchar("user_id").references(() => users.id), // Nullable for guest RSVPs
-  status: varchar("status").notNull().default("attending"), // 'attending', 'maybe', 'not_attending'
-  // Guest RSVP fields
+  id: uuid("id").primaryKey().defaultRandom(),
+  eventId: uuid("event_id").references(() => events.id).notNull(),
+  userId: uuid("user_id").references(() => users.id),
   guestName: varchar("guest_name"),
   guestEmail: varchar("guest_email"),
-  guestAddress: varchar("guest_address"),
-  createdAt: timestamp("created_at").defaultNow(),
+  guestAddress: text("guest_address"),
+  status: varchar("status").notNull().default("attending"), // attending, not_attending, maybe
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
 });
 
-export const comments = pgTable("comments", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  eventId: varchar("event_id").references(() => events.id).notNull(),
-  userId: varchar("user_id").references(() => users.id), // Nullable for guest comments
-  // Guest comment fields
-  guestName: varchar("guest_name"),
-  guestEmail: varchar("guest_email"),
-  content: text("content").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const media = pgTable("media", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  eventId: varchar("event_id").references(() => events.id),
-  commentId: varchar("comment_id").references(() => comments.id),
-  userId: varchar("user_id").references(() => users.id), // Nullable for guest uploads
-  guestName: varchar("guest_name"),
-  guestEmail: varchar("guest_email"),
-  type: varchar("type").notNull(), // 'image', 'video'
-  url: varchar("url").notNull(),
-  filename: varchar("filename"),
-  fileSize: integer("file_size"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
+// Favorites
 export const favorites = pgTable("favorites", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id).notNull(),
-  eventId: varchar("event_id").notNull(), // Can be external event ID
-  externalSource: varchar("external_source"), // 'ticketmaster', 'meetup', 'user'
-  createdAt: timestamp("created_at").defaultNow(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id).notNull(),
+  eventId: uuid("event_id").references(() => events.id).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
 });
 
-// Insert schemas
+// Zod schemas for validation
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const selectUserSchema = createSelectSchema(users);
+
 export const insertEventSchema = createInsertSchema(events).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
+export const selectEventSchema = createSelectSchema(events);
+
 export const insertRsvpSchema = createInsertSchema(rsvps).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
-export const insertCommentSchema = createInsertSchema(comments).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertMediaSchema = createInsertSchema(media).omit({
-  id: true,
-  createdAt: true,
-});
+export const selectRsvpSchema = createSelectSchema(rsvps);
 
 export const insertFavoriteSchema = createInsertSchema(favorites).omit({
   id: true,
   createdAt: true,
 });
 
-// Validation schemas for authentication
-export const loginSchema = z.object({
-  email: z.string().email().toLowerCase(),
-  password: z.string().min(1),
-});
-
-export const registerSchema = z.object({
-  email: z.string().email().toLowerCase(),
-  password: z.string()
-    .min(6, "Password must be at least 6 characters")
-    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number"),
-  firstName: z.string().min(1).trim(),
-  lastName: z.string().min(1).trim(),
-  university: z.string().trim().optional(),
-  graduationYear: z.number().min(2020).max(2030).optional(),
-});
-
-// User schemas
-export const insertUserSchema = createInsertSchema(users);
-export const selectUserSchema = createSelectSchema(users);
+export const selectFavoriteSchema = createSelectSchema(favorites);
 
 // Types
-export type InsertUser = typeof users.$inferInsert;
-export type NewUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
-export type LoginData = z.infer<typeof loginSchema>;
-export type RegisterData = z.infer<typeof registerSchema>;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+
 export type Event = typeof events.$inferSelect;
 export type InsertEvent = z.infer<typeof insertEventSchema>;
+
 export type Rsvp = typeof rsvps.$inferSelect;
 export type InsertRsvp = z.infer<typeof insertRsvpSchema>;
-export type Comment = typeof comments.$inferSelect;
-export type InsertComment = z.infer<typeof insertCommentSchema>;
-export type Media = typeof media.$inferSelect;
-export type InsertMedia = z.infer<typeof insertMediaSchema>;
+
 export type Favorite = typeof favorites.$inferSelect;
 export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;
