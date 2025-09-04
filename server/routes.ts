@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { authMiddleware as requireAuth } from "./middleware/auth";
 import authRoutes from "./routes/auth";
-import { insertEventSchema, insertRsvpSchema, insertCommentSchema, insertMediaSchema, insertFavoriteSchema } from "@shared/schema";
+import { insertEventSchema, insertRsvpSchema, insertFavoriteSchema } from "@shared/schema";
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { ticketmasterService } from "./services/ticketmaster";
@@ -218,7 +218,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(event);
     } catch (error) {
       console.error("Error creating event:", error);
+      console.error("Full error details:", JSON.stringify(error, null, 2));
+      console.error("Event body received:", req.body);
+      
       if (error && typeof error === 'object' && 'name' in error && error.name === "ZodError") {
+        console.error("Zod validation errors:", (error as any).errors);
         return res.status(400).json({ message: "Invalid event data", errors: (error as any).errors });
       }
       res.status(500).json({ message: "Failed to create event" });

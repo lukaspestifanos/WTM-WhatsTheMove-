@@ -1,8 +1,7 @@
 import { 
-  users, events, rsvps, comments, media, favorites,
+  users, events, rsvps, favorites,
   type User, type InsertUser, type Event, type InsertEvent, 
-  type Rsvp, type InsertRsvp, type Comment, type InsertComment,
-  type Media, type InsertMedia, type Favorite, type InsertFavorite
+  type Rsvp, type InsertRsvp, type Favorite, type InsertFavorite
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql } from "drizzle-orm";
@@ -25,18 +24,10 @@ export interface IStorage {
   createGuestRsvp(rsvp: InsertRsvp): Promise<Rsvp>;
   createOrUpdateRsvp(rsvp: InsertRsvp): Promise<Rsvp>;
   
-  // Comment operations
-  getEventComments(eventId: string): Promise<Comment[]>;
-  createComment(comment: InsertComment): Promise<Comment>;
-  
-  // Media operations
-  getEventMedia(eventId: string): Promise<Media[]>;
-  getCommentMedia(commentId: string): Promise<Media[]>;
-  createMedia(media: InsertMedia): Promise<Media>;
-  
-  // Favorites operations
+  // Favorite operations
   getUserFavorites(userId: string): Promise<Favorite[]>;
   addFavorite(favorite: InsertFavorite): Promise<Favorite>;
+  removeFavorite(userId: string, eventId: string): Promise<void>;
   removeFavorite(userId: string, eventId: string, externalSource?: string): Promise<void>;
   isFavorited(userId: string, eventId: string, externalSource?: string): Promise<boolean>;
 }
@@ -134,33 +125,6 @@ export class DatabaseStorage implements IStorage {
     return rsvp;
   }
 
-  async getEventComments(eventId: string): Promise<Comment[]> {
-    return await db.select().from(comments).where(eq(comments.eventId, eventId));
-  }
-
-  async createComment(commentData: InsertComment): Promise<Comment> {
-    const [comment] = await db
-      .insert(comments)
-      .values(commentData)
-      .returning();
-    return comment;
-  }
-
-  async getEventMedia(eventId: string): Promise<Media[]> {
-    return await db.select().from(media).where(eq(media.eventId, eventId));
-  }
-
-  async getCommentMedia(commentId: string): Promise<Media[]> {
-    return await db.select().from(media).where(eq(media.commentId, commentId));
-  }
-
-  async createMedia(mediaData: InsertMedia): Promise<Media> {
-    const [mediaRecord] = await db
-      .insert(media)
-      .values(mediaData)
-      .returning();
-    return mediaRecord;
-  }
 
   async getUserFavorites(userId: string): Promise<Favorite[]> {
     return await db.select().from(favorites).where(eq(favorites.userId, userId));
