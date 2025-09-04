@@ -50,19 +50,13 @@ export default function AuthPage() {
   // Check for redirect after auth
   useEffect(() => {
     if (user && !authLoading) {
-      const redirect = sessionStorage.getItem('redirectAfterAuth');
-      if (redirect) {
-        sessionStorage.removeItem('redirectAfterAuth');
-        // Don't redirect to create-event, go home instead
-        const destination = redirect === '/create-event' ? '/' : redirect;
-        toast({
-          title: "Welcome back!",
-          description: "You're now signed in.",
-        });
-        setLocation(destination);
-      } else {
-        setLocation('/');
-      }
+      // Always redirect to home page after authentication
+      sessionStorage.removeItem('redirectAfterAuth'); // Clear any stored redirects
+      toast({
+        title: "Welcome!",
+        description: "You're now signed in.",
+      });
+      setLocation('/');
     }
   }, [user, authLoading, setLocation, toast]);
 
