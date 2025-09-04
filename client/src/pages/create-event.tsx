@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -50,11 +50,15 @@ export default function CreateEvent() {
     }
   }, [isAuthenticated, isLoading, redirectingToLogin, toast]);
 
-  // Show login redirect UI
-  if (!isLoading && !isAuthenticated) {
-    if (!redirectingToLogin) {
+  // Use useEffect to handle login redirect to prevent infinite re-renders
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated && !redirectingToLogin) {
       handleLoginRedirect();
     }
+  }, [isLoading, isAuthenticated, redirectingToLogin, handleLoginRedirect]);
+
+  // Show login redirect UI
+  if (!isLoading && !isAuthenticated) {
     return (
       <div className="min-h-screen bg-background p-4 flex items-center justify-center">
         <div className="text-center">
