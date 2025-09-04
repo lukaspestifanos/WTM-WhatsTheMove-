@@ -132,7 +132,7 @@ export default function Home() {
         />
         
         {/* Floating Search Bar */}
-        <Card className="absolute top-12 left-4 right-4 bg-white/95 backdrop-blur-lg border-white/30 shadow-lg">
+        <Card className="absolute top-12 left-4 right-4 bg-white/95 backdrop-blur-lg border-white/30 shadow-lg z-20">
           <div className="flex items-center space-x-3 p-4">
             <i className="fas fa-search text-muted-foreground"></i>
             <Input 
@@ -157,7 +157,7 @@ export default function Home() {
         {/* Current Location Button */}
         <Button
           onClick={handleCenterOnLocation}
-          className="absolute bottom-6 right-4 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center text-primary p-0"
+          className="absolute bottom-6 right-4 w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center text-primary p-0 z-20"
           data-testid="button-location"
         >
           <i className="fas fa-location-arrow"></i>
@@ -165,7 +165,7 @@ export default function Home() {
       </div>
 
       {/* Bottom Sheet */}
-      <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-white/98 to-white/95 backdrop-blur-lg border-t border-black/10 rounded-t-3xl flex flex-col">
+      <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-white/98 to-white/95 backdrop-blur-lg border-t border-black/10 rounded-t-3xl flex flex-col z-10">
         {/* Sheet Handle */}
         <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
           <div className="w-12 h-1 bg-muted-foreground/30 rounded-full"></div>
@@ -223,7 +223,7 @@ export default function Home() {
       {/* Floating Action Button */}
       <Button
         onClick={handleCreateEvent}
-        className="fixed bottom-20 right-4 w-16 h-16 bg-primary text-primary-foreground rounded-2xl shadow-xl p-0 text-xl"
+        className="fixed bottom-20 right-4 w-16 h-16 bg-primary text-primary-foreground rounded-2xl shadow-xl p-0 text-xl z-30"
         data-testid="button-create-event"
       >
         <i className="fas fa-plus"></i>

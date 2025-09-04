@@ -131,7 +131,7 @@ export default function InteractiveMap({ userLocation, events, onEventClick }: I
   return (
     <div 
       ref={mapRef} 
-      className="w-full h-full"
+      className="w-full h-full relative z-0"
       data-testid="interactive-map"
     />
   );
