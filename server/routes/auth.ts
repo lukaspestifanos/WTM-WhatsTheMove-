@@ -103,10 +103,19 @@ router.post('/login', async (req, res) => {
     }
 
     // Check password
+    console.log('Login attempt:', {
+      email: validatedData.email,
+      hasStoredPassword: !!user.password,
+      storedPasswordLength: user.password?.length,
+      providedPasswordLength: validatedData.password?.length
+    });
+
     const isValidPassword = await bcrypt.compare(
       validatedData.password,
       user.password
     );
+
+    console.log('Password comparison result:', isValidPassword);
 
     if (!isValidPassword) {
       return res.status(401).json({
