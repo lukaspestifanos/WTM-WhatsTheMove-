@@ -22,7 +22,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Events routes
+  // Events routes (public access)
   app.get("/api/events/search", async (req, res) => {
     try {
       const { lat, lng, radius = 50, category, keyword, startDate, endDate } = req.query;
@@ -112,8 +112,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(event);
     } catch (error) {
       console.error("Error creating event:", error);
-      if (error.name === "ZodError") {
-        return res.status(400).json({ message: "Invalid event data", errors: error.errors });
+      if (error && typeof error === 'object' && 'name' in error && error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid event data", errors: (error as any).errors });
       }
       res.status(500).json({ message: "Failed to create event" });
     }
@@ -142,8 +142,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(rsvp);
     } catch (error) {
       console.error("Error creating RSVP:", error);
-      if (error.name === "ZodError") {
-        return res.status(400).json({ message: "Invalid RSVP data", errors: error.errors });
+      if (error && typeof error === 'object' && 'name' in error && error.name === "ZodError") {
+        return res.status(400).json({ message: "Invalid RSVP data", errors: (error as any).errors });
       }
       res.status(500).json({ message: "Failed to create RSVP" });
     }

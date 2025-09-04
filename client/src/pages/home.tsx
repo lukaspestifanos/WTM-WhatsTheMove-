@@ -32,27 +32,11 @@ interface Event {
 
 export default function Home() {
   const { toast } = useToast();
-  const { user, isAuthenticated, isLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [showEventList, setShowEventList] = useState(true);
-
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-      return;
-    }
-  }, [isAuthenticated, isLoading, toast]);
 
   // Get user location
   useEffect(() => {
@@ -82,20 +66,7 @@ export default function Home() {
   const { data: eventsData, isLoading: eventsLoading, error } = useQuery({
     queryKey: ["/api/events/search", userLocation?.lat, userLocation?.lng, activeCategory, searchQuery],
     enabled: !!userLocation,
-    retry: (failureCount, error) => {
-      if (isUnauthorizedError(error as Error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return false;
-      }
-      return failureCount < 3;
-    },
+    retry: 3,
   });
 
   const events = eventsData?.events || [];
@@ -124,16 +95,7 @@ export default function Home() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  // Remove loading check since we don't need authentication
 
   return (
     <div className="relative w-full h-screen max-w-sm mx-auto bg-background shadow-2xl overflow-hidden">

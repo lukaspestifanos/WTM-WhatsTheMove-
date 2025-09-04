@@ -46,7 +46,7 @@ class TicketmasterService {
   private baseUrl = "https://app.ticketmaster.com/discovery/v2";
 
   constructor() {
-    this.apiKey = process.env.TICKETMASTER_API_KEY || process.env.VITE_TICKETMASTER_API_KEY || "";
+    this.apiKey = process.env.TICKETMASTER_API_KEY || process.env.VITE_TICKETMASTER_API_KEY || "OatWZ5V1ZeIKi58oOAitKRTvlrcKr5NA";
     if (!this.apiKey) {
       console.warn("Ticketmaster API key not provided. Event search will be limited.");
     }

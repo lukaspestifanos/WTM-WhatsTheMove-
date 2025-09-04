@@ -11,19 +11,11 @@ import CreateEvent from "@/pages/create-event";
 import EventDetails from "@/pages/event-details";
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
-
   return (
     <Switch>
-      {isLoading || !isAuthenticated ? (
-        <Route path="/" component={Landing} />
-      ) : (
-        <>
-          <Route path="/" component={Home} />
-          <Route path="/create-event" component={CreateEvent} />
-          <Route path="/events/:id" component={EventDetails} />
-        </>
-      )}
+      <Route path="/" component={Home} />
+      <Route path="/create-event" component={CreateEvent} />
+      <Route path="/events/:id" component={EventDetails} />
       <Route component={NotFound} />
     </Switch>
   );
