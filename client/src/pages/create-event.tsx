@@ -1,4 +1,5 @@
 import { useState } from "react";
+import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -32,16 +33,22 @@ export default function CreateEvent() {
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const { isAuthenticated, isLoading } = useAuth();
 
-  // Redirect to login if not authenticated
+  // Redirect to login if not authenticated (using useEffect to avoid infinite loops)
+  React.useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      toast({
+        title: "Login Required",
+        description: "You need to be logged in to create events. Redirecting...",
+        variant: "destructive",
+      });
+      const timer = setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, isAuthenticated, toast]);
+
   if (!isLoading && !isAuthenticated) {
-    toast({
-      title: "Login Required",
-      description: "You need to be logged in to create events. Redirecting...",
-      variant: "destructive",
-    });
-    setTimeout(() => {
-      window.location.href = "/api/login";
-    }, 1000);
     return (
       <div className="min-h-screen bg-background p-4 flex items-center justify-center">
         <div className="text-center">
@@ -221,6 +228,7 @@ export default function CreateEvent() {
                           placeholder="Tell people what to expect..."
                           className="min-h-[100px]"
                           {...field}
+                          value={field.value || ""}
                           data-testid="textarea-description"
                         />
                       </FormControl>
@@ -299,6 +307,7 @@ export default function CreateEvent() {
                             step="0.01"
                             placeholder="0.00"
                             {...field}
+                            value={field.value?.toString() || ""}
                             onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                             data-testid="input-price"
                           />
@@ -320,6 +329,7 @@ export default function CreateEvent() {
                             min="1"
                             placeholder="No limit"
                             {...field}
+                            value={field.value?.toString() || ""}
                             onChange={(e) => field.onChange(parseInt(e.target.value) || undefined)}
                             data-testid="input-max-attendees"
                           />
