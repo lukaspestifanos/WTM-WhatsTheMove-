@@ -50,6 +50,8 @@ class TicketmasterService {
 
   constructor() {
     this.apiKey = process.env.TICKETMASTER_API_KEY || process.env.VITE_TICKETMASTER_API_KEY || "OatWZ5V1ZeIKi58oOAitKRTvlrcKr5NA";
+    console.log("Ticketmaster API Key status:", this.apiKey ? "Present" : "Missing");
+    console.log("Environment:", process.env.NODE_ENV);
     if (!this.apiKey) {
       console.warn("Ticketmaster API key not provided. Event search will be limited.");
     }
@@ -62,6 +64,7 @@ class TicketmasterService {
     options: SearchOptions = {}
   ) {
     if (!this.apiKey) {
+      console.error("No Ticketmaster API key available, returning empty results");
       return [];
     }
 
@@ -113,10 +116,16 @@ class TicketmasterService {
         params.append("classificationName", "music,sports,arts,miscellaneous,film");
       }
 
-      const response = await fetch(`${this.baseUrl}/events.json?${params}`);
+      const url = `${this.baseUrl}/events.json?${params}`;
+      console.log("Making Ticketmaster API request to:", url.replace(this.apiKey, '[API_KEY]'));
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
-        throw new Error(`Ticketmaster API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`Ticketmaster API error: ${response.status} - ${response.statusText}`);
+        console.error(`Error details:`, errorText);
+        throw new Error(`Ticketmaster API error: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
