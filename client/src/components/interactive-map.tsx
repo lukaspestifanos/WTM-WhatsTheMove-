@@ -20,16 +20,18 @@ export default function InteractiveMap({ userLocation, events, onEventClick }: I
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
 
-  const getCategoryColor = (category: string) => {
-    const colors = {
-      parties: "#ec4899",
-      study: "#10b981", 
-      sports: "#f59e0b",
-      concerts: "#8b5cf6",
-      social: "#3b82f6",
-      restaurants: "#ef4444",
+  const getCategoryEmoji = (category: string) => {
+    const emojis = {
+      parties: "🎉",
+      study: "📚",
+      sports: "🏀",
+      concerts: "🎵",
+      social: "🍕",
+      restaurants: "🍽️",
+      food: "🍔",
+      nightlife: "🌃",
     };
-    return colors[category as keyof typeof colors] || colors.social;
+    return emojis[category as keyof typeof emojis] || "🎉";
   };
 
   useEffect(() => {
@@ -106,11 +108,12 @@ export default function InteractiveMap({ userLocation, events, onEventClick }: I
       if (event.latitude && event.longitude) {
         const eventIcon = L.divIcon({
           className: 'event-marker',
-          html: `<div class="w-5 h-5 rounded-full border-3 border-white shadow-xl hover:scale-125 transition-all cursor-pointer z-50" style="background-color: ${getCategoryColor(event.category)}">
-                   <div class="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-pulse"></div>
+          html: `<div class="w-8 h-8 bg-white rounded-full border-2 border-gray-300 shadow-lg hover:scale-125 transition-all duration-200 cursor-pointer z-50 flex items-center justify-center">
+                   <span class="text-xl">${getCategoryEmoji(event.category)}</span>
+                   <div class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                  </div>`,
-          iconSize: [20, 20],
-          iconAnchor: [10, 10],
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
         });
 
         const marker = L.marker([event.latitude, event.longitude], { icon: eventIcon })
