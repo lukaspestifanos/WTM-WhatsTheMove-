@@ -9,6 +9,9 @@ import Landing from "@/pages/landing";
 import Home from "@/pages/home";
 import CreateEvent from "@/pages/create-event";
 import EventDetails from "@/pages/event-details";
+import MyEvents from "@/pages/my-events";
+import Friends from "@/pages/friends";
+import Profile from "@/pages/profile";
 
 function Router() {
   return (
@@ -16,6 +19,9 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/create-event" component={CreateEvent} />
       <Route path="/events/:id" component={EventDetails} />
+      <Route path="/my-events" component={MyEvents} />
+      <Route path="/friends" component={Friends} />
+      <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   );
