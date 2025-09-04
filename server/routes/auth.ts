@@ -32,11 +32,23 @@ const setAuthCookie = (res: express.Response, token: string) => {
 // POST /api/register
 router.post('/register', async (req, res) => {
   try {
-    // Validate input
-    const validatedData = registerSchema.parse(req.body);
+    const { email, password, firstName, lastName, university, graduationYear } = req.body;
+
+    // Basic validation
+    if (!email || !password || !firstName || !lastName) {
+      return res.status(400).json({
+        error: 'Email, password, first name, and last name are required'
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        error: 'Password must be at least 6 characters long'
+      });
+    }
 
     // Check if user already exists
-    const existingUser = await storage.getUserByEmail(validatedData.email);
+    const existingUser = await storage.getUserByEmail(email.toLowerCase().trim());
 
     if (existingUser) {
       return res.status(409).json({
@@ -45,16 +57,17 @@ router.post('/register', async (req, res) => {
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(validatedData.password, 12);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     // Create user
     const newUser = await storage.createUser({
-      email: validatedData.email,
+      email: email.toLowerCase().trim(),
       password: hashedPassword,
-      firstName: validatedData.firstName,
-      lastName: validatedData.lastName,
-      university: validatedData.university,
-      graduationYear: validatedData.graduationYear,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      university: university?.trim(),
+      graduationYear: graduationYear,
+      emailVerified: false,
     });
 
     // Create session token
@@ -73,14 +86,6 @@ router.post('/register', async (req, res) => {
 
   } catch (error) {
     console.error('Registration error:', error);
-
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        error: 'Invalid input data',
-        details: error.errors
-      });
-    }
-
     res.status(500).json({
       error: 'Failed to create account. Please try again.'
     });
@@ -90,32 +95,26 @@ router.post('/register', async (req, res) => {
 // POST /api/login
 router.post('/login', async (req, res) => {
   try {
-    // Validate input
-    const validatedData = loginSchema.parse(req.body);
+    const { email, password } = req.body;
+
+    // Basic validation
+    if (!email || !password) {
+      return res.status(400).json({
+        error: 'Email and password are required'
+      });
+    }
 
     // Find user
-    const user = await storage.getUserByEmail(validatedData.email);
+    const user = await storage.getUserByEmail(email.toLowerCase().trim());
 
-    if (!user) {
+    if (!user || !user.password) {
       return res.status(401).json({
         error: 'Invalid email or password'
       });
     }
 
     // Check password
-    console.log('Login attempt:', {
-      email: validatedData.email,
-      hasStoredPassword: !!user.password,
-      storedPasswordLength: user.password?.length,
-      providedPasswordLength: validatedData.password?.length
-    });
-
-    const isValidPassword = await bcrypt.compare(
-      validatedData.password,
-      user.password
-    );
-
-    console.log('Password comparison result:', isValidPassword);
+    const isValidPassword = await bcrypt.compare(password, user.password);
 
     if (!isValidPassword) {
       return res.status(401).json({
@@ -139,14 +138,6 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error('Login error:', error);
-
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        error: 'Invalid input data',
-        details: error.errors
-      });
-    }
-
     res.status(500).json({
       error: 'Failed to login. Please try again.'
     });
