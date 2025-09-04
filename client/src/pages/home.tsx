@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useLocation } from "wouter";
-import { Plus, Search, Filter, Navigation } from "lucide-react";
+import { Search, Filter, Navigation } from "lucide-react";
 
 interface Event {
   id: string;
@@ -136,24 +136,6 @@ export default function Home() {
 
   const events = eventsData?.events || [];
 
-  const handleCreateEvent = () => {
-    // Check if user is authenticated
-    if (!user) {
-      // Store the intended destination
-      sessionStorage.setItem('redirectAfterAuth', '/events/new');
-
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to create an event",
-      });
-
-      // Redirect to login/register page
-      setLocation("/register");
-    } else {
-      // User is authenticated, go to event creation
-      setLocation("/events/new");
-    }
-  };
 
   const handleEventClick = (eventId: string) => {
     const event = events.find(e => e.id === eventId);
@@ -367,17 +349,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Floating Action Button - Only show if authenticated */}
-      {user && (
-        <Button
-          onClick={handleCreateEvent}
-          className="fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full shadow-xl p-0 z-30 transition-all hover:scale-105"
-          data-testid="button-create-event"
-          title="Create Event"
-        >
-          <Plus className="w-6 h-6" />
-        </Button>
-      )}
 
       {/* Bottom Navigation */}
       <BottomNavigation />

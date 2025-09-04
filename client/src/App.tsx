@@ -17,7 +17,7 @@ import AuthPage from "@/pages/auth";
 import { useAuth } from "@/hooks/useAuth";
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -36,7 +36,7 @@ function Router() {
       <Route path="/events/:id" component={EventDetails} />
       
       {/* Protected routes - require authentication */}
-      {isAuthenticated ? (
+      {user ? (
         <>
           <Route path="/create-event" component={CreateEvent} />
           <Route path="/my-events" component={MyEvents} />

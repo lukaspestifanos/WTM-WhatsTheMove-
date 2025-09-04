@@ -1,22 +1,24 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { User, Users, Settings, LogOut, LogIn, Home, Calendar } from "lucide-react";
+import { User, Users, Settings, LogOut, LogIn, Home, Calendar, Plus } from "lucide-react";
 import type { User as UserType } from "@shared/schema";
 
 export function HamburgerMenu() {
   const [isOpen, setIsOpen] = useState(false);
-  const { isAuthenticated, user, logoutMutation } = useAuth();
+  const { user, logoutMutation } = useAuth();
+  const [, setLocation] = useLocation();
   const typedUser = user as UserType | undefined;
 
   const handleHome = () => {
-    window.location.href = "/";
+    setLocation("/");
     setIsOpen(false);
   };
 
   const handleLogin = () => {
-    window.location.href = "/auth";
+    setLocation("/auth");
     setIsOpen(false);
   };
 
@@ -68,7 +70,7 @@ export function HamburgerMenu() {
           </div>
 
           <div className="space-y-4">
-            {isAuthenticated ? (
+            {user ? (
               <>
                 {/* User Profile Section */}
                 <div className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border">
@@ -96,8 +98,24 @@ export function HamburgerMenu() {
                 <div className="space-y-2">
                   <Button
                     variant="ghost"
+                    className="w-full justify-start h-12 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
+                    onClick={() => {
+                      setLocation("/create-event");
+                      setIsOpen(false);
+                    }}
+                    data-testid="button-create-event"
+                  >
+                    <Plus className="mr-3 h-5 w-5" />
+                    Create Event
+                  </Button>
+                  
+                  <Button
+                    variant="ghost"
                     className="w-full justify-start h-12 hover:bg-purple-50 dark:hover:bg-purple-950"
-                    onClick={() => setIsOpen(false)}
+                    onClick={() => {
+                      setLocation("/profile");
+                      setIsOpen(false);
+                    }}
                     data-testid="button-profile"
                   >
                     <User className="mr-3 h-5 w-5" />
@@ -107,7 +125,10 @@ export function HamburgerMenu() {
                   <Button
                     variant="ghost"
                     className="w-full justify-start h-12 hover:bg-purple-50 dark:hover:bg-purple-950"
-                    onClick={() => setIsOpen(false)}
+                    onClick={() => {
+                      setLocation("/friends");
+                      setIsOpen(false);
+                    }}
                     data-testid="button-friends"
                   >
                     <Users className="mr-3 h-5 w-5" />
@@ -117,11 +138,14 @@ export function HamburgerMenu() {
                   <Button
                     variant="ghost"
                     className="w-full justify-start h-12 hover:bg-purple-50 dark:hover:bg-purple-950"
-                    onClick={() => setIsOpen(false)}
+                    onClick={() => {
+                      setLocation("/profile");
+                      setIsOpen(false);
+                    }}
                     data-testid="button-settings"
                   >
                     <Settings className="mr-3 h-5 w-5" />
-                    Settings
+                    Account Settings
                   </Button>
                 </div>
 
