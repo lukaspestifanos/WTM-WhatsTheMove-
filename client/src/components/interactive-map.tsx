@@ -74,9 +74,13 @@ export default function InteractiveMap({ userLocation, events, onEventClick }: I
     // Create custom user location icon
     const userIcon = L.divIcon({
       className: 'user-location-marker',
-      html: '<div class="w-3 h-3 bg-blue-600 rounded-full shadow-md"></div>',
-      iconSize: [12, 12],
-      iconAnchor: [6, 6],
+      html: `<div class="relative">
+               <div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>
+               <div class="absolute inset-0 w-4 h-4 bg-blue-400 rounded-full animate-ping opacity-75"></div>
+               <div class="absolute inset-0.5 w-3 h-3 bg-blue-600 rounded-full"></div>
+             </div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
     });
 
     const userMarker = L.marker([userLocation.lat, userLocation.lng], { icon: userIcon })
