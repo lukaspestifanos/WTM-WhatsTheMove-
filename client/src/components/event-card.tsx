@@ -40,6 +40,9 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
       sports: "bg-gradient-to-r from-amber-500 to-orange-600 text-white",
       concerts: "bg-gradient-to-r from-purple-500 to-violet-600 text-white",
       social: "bg-gradient-to-r from-blue-500 to-indigo-600 text-white",
+      restaurants: "bg-gradient-to-r from-red-500 to-orange-600 text-white",
+      food: "bg-gradient-to-r from-yellow-500 to-red-500 text-white",
+      nightlife: "bg-gradient-to-r from-indigo-500 to-purple-600 text-white",
     };
     return colors[category as keyof typeof colors] || colors.social;
   };
@@ -51,6 +54,9 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
       sports: "🏀",
       concerts: "🎵",
       social: "🍕",
+      restaurants: "🍽️",
+      food: "🍔",
+      nightlife: "🌃",
     };
     return emojis[category as keyof typeof emojis] || "🎉";
   };
@@ -62,6 +68,9 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
       concerts: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?ixlib=rb-4.0.3&auto=format&fit=crop&w=120&h=120",
       sports: "https://images.unsplash.com/photo-1546519638-68e109498ffc?ixlib=rb-4.0.3&auto=format&fit=crop&w=120&h=120",
       social: "https://images.unsplash.com/photo-1511632765486-a01980e01a18?ixlib=rb-4.0.3&auto=format&fit=crop&w=120&h=120",
+      restaurants: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&auto=format&fit=crop&w=120&h=120",
+      food: "https://images.unsplash.com/photo-1565299624946-b28f40a0ca4b?ixlib=rb-4.0.3&auto=format&fit=crop&w=120&h=120",
+      nightlife: "https://images.unsplash.com/photo-1543007630-9710e4a00a20?ixlib=rb-4.0.3&auto=format&fit=crop&w=120&h=120",
     };
     return images[category as keyof typeof images] || images.social;
   };
@@ -149,10 +158,20 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
     }
   };
 
+  const handleCardClick = () => {
+    // For external events (Ticketmaster), redirect to their website
+    if (event.externalSource && event.url) {
+      window.open(event.url, "_blank");
+      return;
+    }
+    // For user events, go to event details page
+    onEventClick(event.id);
+  };
+
   return (
     <Card 
       className="bg-white/90 backdrop-blur-lg border-white/20 p-4 rounded-2xl shadow-lg cursor-pointer hover:shadow-xl transition-shadow"
-      onClick={() => onEventClick(event.id)}
+      onClick={handleCardClick}
       data-testid={`card-event-${event.id}`}
     >
       <div className="flex space-x-4">
