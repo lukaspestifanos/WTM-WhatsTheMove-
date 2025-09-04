@@ -48,7 +48,7 @@ export default function CreateEvent() {
         window.location.assign(loginUrl.toString());
       }, 1000);
     }
-  }, [isAuthenticated, isLoading, redirectingToLogin, toast]);
+  }, [isAuthenticated, isLoading, redirectingToLogin]);
 
   // Use useEffect to handle login redirect to prevent infinite re-renders
   useEffect(() => {
@@ -188,10 +188,8 @@ function CreateEventForm({
   if (showPayment && paymentIntentId) {
     return (
       <PaymentCheckout
-        clientSecret={paymentIntentId}
-        eventData={form.getValues()}
-        onSuccess={() => handlePaymentSuccess(form.getValues())}
-        onBack={() => {
+        onPaymentSuccess={() => handlePaymentSuccess(form.getValues())}
+        onCancel={() => {
           setShowPayment(false);
           setPaymentIntentId(null);
         }}
