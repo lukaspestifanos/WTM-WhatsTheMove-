@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import MapView from "@/components/map-view";
+import InteractiveMap from "@/components/interactive-map";
 import EventCard from "@/components/event-card";
 import BottomNavigation from "@/components/bottom-navigation";
 import CategoryFilters from "@/components/category-filters";
@@ -125,7 +125,7 @@ export default function Home() {
     <div className="relative w-full h-screen max-w-sm mx-auto bg-background shadow-2xl overflow-hidden">
       {/* Map View */}
       <div className="relative w-full h-2/3">
-        <MapView 
+        <InteractiveMap 
           userLocation={userLocation}
           events={events}
           onEventClick={(eventId) => setLocation(`/events/${eventId}`)}
@@ -165,14 +165,14 @@ export default function Home() {
       </div>
 
       {/* Bottom Sheet */}
-      <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-white/98 to-white/95 backdrop-blur-lg border-t border-black/10 rounded-t-3xl overflow-hidden">
+      <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-white/98 to-white/95 backdrop-blur-lg border-t border-black/10 rounded-t-3xl flex flex-col">
         {/* Sheet Handle */}
-        <div className="flex justify-center pt-3 pb-2">
+        <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
           <div className="w-12 h-1 bg-muted-foreground/30 rounded-full"></div>
         </div>
         
         {/* Sheet Header */}
-        <div className="px-6 pb-4">
+        <div className="px-6 pb-4 flex-shrink-0">
           <h2 className="text-2xl font-bold text-foreground mb-2" data-testid="text-page-title">
             What's the Move?
           </h2>
@@ -187,13 +187,15 @@ export default function Home() {
         </div>
         
         {/* Category Filters */}
-        <CategoryFilters 
-          activeCategory={activeCategory}
-          onCategoryChange={setActiveCategory}
-        />
+        <div className="flex-shrink-0">
+          <CategoryFilters 
+            activeCategory={activeCategory}
+            onCategoryChange={setActiveCategory}
+          />
+        </div>
         
-        {/* Event List */}
-        <div className="flex-1 overflow-y-auto px-6">
+        {/* Event List - This will now properly scroll */}
+        <div className="flex-1 overflow-y-auto px-6 min-h-0">
           {eventsLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -205,7 +207,7 @@ export default function Home() {
               <p className="text-muted-foreground">Try adjusting your filters or create a new event</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 pb-24">
               {events.map((event: Event) => (
                 <EventCard 
                   key={event.id}
@@ -215,7 +217,6 @@ export default function Home() {
               ))}
             </div>
           )}
-          <div className="h-24"></div>
         </div>
       </div>
 
