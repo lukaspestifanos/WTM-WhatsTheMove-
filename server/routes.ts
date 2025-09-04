@@ -201,12 +201,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Transform the event data to ensure proper types
       const eventData = insertEventSchema.parse({
         ...eventBody,
         hostId: userId,
         isPaid,
         platformFee,
         stripePaymentIntentId,
+        startDate: new Date(eventBody.startDate), // Ensure it's a Date object
+        endDate: eventBody.endDate ? new Date(eventBody.endDate) : null,
+        price: Number(eventBody.price) || 0,
+        maxAttendees: eventBody.maxAttendees ? Number(eventBody.maxAttendees) : null,
       });
       
       const event = await storage.createEvent(eventData);

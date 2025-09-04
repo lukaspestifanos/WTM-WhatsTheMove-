@@ -70,9 +70,11 @@ export default function CreateEvent() {
         description: data.description || "",
         category: data.category,
         location: data.location,
-        startDate: data.startDate, // Send as ISO string
-        price: data.price,
+        startDate: new Date(data.startDate).toISOString(), // Convert to proper ISO string
+        price: Number(data.price) || 0,
         maxAttendees: data.maxAttendees || null,
+        externalSource: 'user', // Mark as user-created event
+        isPublic: true, // Default to public
       };
 
       const response = await fetch("/api/events", {
