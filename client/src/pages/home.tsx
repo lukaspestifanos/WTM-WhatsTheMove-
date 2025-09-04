@@ -136,22 +136,15 @@ export default function Home() {
             const event = events.find(e => e.id === eventId);
             if (event?.externalSource && event?.url) {
               if (event.externalSource === 'ticketmaster') {
-                // Try to open Ticketmaster app using deep link
+                // Try to open Ticketmaster app using direct deep link
                 try {
                   const appUrl = event.url.replace('https://www.ticketmaster.com', 'ticketmaster://');
-                  const iframe = document.createElement('iframe');
-                  iframe.style.display = 'none';
-                  iframe.src = appUrl;
-                  document.body.appendChild(iframe);
-                  
-                  setTimeout(() => {
-                    document.body.removeChild(iframe);
-                  }, 1000);
+                  window.location.href = appUrl;
                   
                   // Fallback to web after a delay if app doesn't open
                   setTimeout(() => {
                     window.open(event.url!, "_blank");
-                  }, 1500);
+                  }, 2000);
                 } catch (error) {
                   window.open(event.url, "_blank");
                 }

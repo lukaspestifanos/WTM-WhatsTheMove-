@@ -32,6 +32,9 @@ interface TicketmasterEvent {
     genre?: { name: string };
     segment?: { name: string };
   }>;
+  accessibility?: {
+    info: string;
+  };
 }
 
 interface SearchOptions {
@@ -128,6 +131,28 @@ class TicketmasterService {
     }
   }
 
+  private cleanTitle(title: string): string {
+    // Remove presenter information (e.g., "artist presents:" or "venue presents:")
+    let cleaned = title.replace(/^[^:]+\s+presents:\s*/i, '');
+    
+    // Remove bio/description after colons if it's longer than the main title
+    const colonIndex = cleaned.indexOf(':');
+    if (colonIndex > 0) {
+      const beforeColon = cleaned.substring(0, colonIndex).trim();
+      const afterColon = cleaned.substring(colonIndex + 1).trim();
+      
+      // If the part after colon is much longer, it's probably bio text
+      if (afterColon.length > beforeColon.length * 1.5) {
+        cleaned = beforeColon;
+      }
+    }
+    
+    // Remove common descriptive phrases
+    cleaned = cleaned.replace(/\s*-\s*(official|live|tour|concert|show).*$/i, '');
+    
+    return cleaned.trim();
+  }
+
   private transformEvent(event: TicketmasterEvent) {
     const venue = event._embedded?.venues?.[0];
     const image = event.images?.find(img => img.width >= 300)?.url || event.images?.[0]?.url;
@@ -159,7 +184,7 @@ class TicketmasterService {
 
     return {
       id: event.id,
-      title: event.name,
+      title: this.cleanTitle(event.name),
       description: `Official ${event.classifications?.[0]?.segment?.name || 'Event'}`,
       category: this.mapCategory(event.classifications?.[0]?.segment?.name),
       startDate: event.dates.start.dateTime || `${event.dates.start.localDate}T${event.dates.start.localTime || '20:00:00'}`,
