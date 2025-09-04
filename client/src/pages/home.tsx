@@ -128,7 +128,16 @@ export default function Home() {
         <InteractiveMap 
           userLocation={userLocation}
           events={events}
-          onEventClick={(eventId) => setLocation(`/events/${eventId}`)}
+          onEventClick={(eventId) => {
+            // For external events (Ticketmaster), open their URL directly
+            const event = events.find(e => e.id === eventId);
+            if (event?.externalSource && event?.url) {
+              window.open(event.url, "_blank");
+            } else {
+              // For user events, go to event details page
+              setLocation(`/events/${eventId}`);
+            }
+          }}
         />
         
         {/* Floating Search Bar */}

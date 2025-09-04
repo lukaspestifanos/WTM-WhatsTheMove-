@@ -41,8 +41,8 @@ export default function InteractiveMap({ userLocation, events, onEventClick }: I
       attributionControl: false,
     });
 
-    // Dark mode tile layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // Light mode tile layer for better UI contrast
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
       attribution: ''
     }).addTo(map);
@@ -106,16 +106,19 @@ export default function InteractiveMap({ userLocation, events, onEventClick }: I
       if (event.latitude && event.longitude) {
         const eventIcon = L.divIcon({
           className: 'event-marker',
-          html: `<div class="w-4 h-4 rounded-full border-2 border-white shadow-lg hover:scale-110 transition-transform cursor-pointer" style="background-color: ${getCategoryColor(event.category)}">
+          html: `<div class="w-5 h-5 rounded-full border-3 border-white shadow-xl hover:scale-125 transition-all cursor-pointer z-50" style="background-color: ${getCategoryColor(event.category)}">
                    <div class="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-pulse"></div>
                  </div>`,
-          iconSize: [16, 16],
-          iconAnchor: [8, 8],
+          iconSize: [20, 20],
+          iconAnchor: [10, 10],
         });
 
         const marker = L.marker([event.latitude, event.longitude], { icon: eventIcon })
           .addTo(mapInstanceRef.current!)
-          .on('click', () => onEventClick(event.id));
+          .on('click', (e) => {
+            e.originalEvent?.stopPropagation();
+            onEventClick(event.id);
+          });
 
         // Add popup with event info
         marker.bindPopup(`
