@@ -26,7 +26,7 @@ export default function InteractiveMap({ userLocation, events, onEventClick }: I
       study: "📚",
       sports: "🏀",
       concerts: "🎵",
-      social: "🍕",
+      social: "🎤",
       restaurants: "🍽️",
       food: "🍔",
       nightlife: "🌃",

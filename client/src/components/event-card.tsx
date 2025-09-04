@@ -71,7 +71,7 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
       study: "📚",
       sports: "🏀",
       concerts: "🎵",
-      social: "🍕",
+      social: "🎤",
       restaurants: "🍽️",
       food: "🍔",
       nightlife: "🌃",

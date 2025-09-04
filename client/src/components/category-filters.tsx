@@ -12,7 +12,7 @@ export default function CategoryFilters({ activeCategory, onCategoryChange }: Ca
     { id: "restaurants", label: "🍽️ Food", color: "from-red-500 to-orange-600" },
     { id: "sports", label: "🏀 Sports", color: "from-amber-500 to-orange-600" },
     { id: "study", label: "📚 Study", color: "from-emerald-500 to-green-600" },
-    { id: "social", label: "🍕 Social", color: "from-blue-500 to-indigo-600" },
+    { id: "social", label: "🎤 Social", color: "from-blue-500 to-indigo-600" },
   ];
 
   return (
