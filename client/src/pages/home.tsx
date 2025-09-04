@@ -67,9 +67,33 @@ export default function Home() {
     queryKey: ["/api/events/search", userLocation?.lat, userLocation?.lng, activeCategory, searchQuery],
     enabled: !!userLocation,
     retry: 3,
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        lat: userLocation?.lat.toString() || '',
+        lng: userLocation?.lng.toString() || '',
+        radius: '50',
+      });
+      
+      if (activeCategory) {
+        params.append('category', activeCategory);
+      }
+      
+      if (searchQuery) {
+        params.append('keyword', searchQuery);
+      }
+      
+      const response = await fetch(`/api/events/search?${params}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log('Frontend received events:', data.events?.length || 0);
+      return data;
+    },
   });
 
   const events = eventsData?.events || [];
+  console.log('Events being displayed:', events.length);
 
   const handleCreateEvent = () => {
     setLocation("/create-event");
