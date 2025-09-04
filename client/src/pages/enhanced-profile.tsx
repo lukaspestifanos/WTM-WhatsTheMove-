@@ -55,17 +55,17 @@ export default function EnhancedProfile() {
   useEffect(() => {
     if (user) {
       setProfileData({
-        bio: user.bio || "",
-        instagramHandle: user.instagramHandle || "",
-        twitterHandle: user.twitterHandle || "",
-        profileImageUrl: user.profileImageUrl || "",
+        bio: (user as any).bio || "",
+        instagramHandle: (user as any).instagramHandle || "",
+        twitterHandle: (user as any).twitterHandle || "",
+        profileImageUrl: (user as any).profileImageUrl || "",
       });
       
       setStats({
-        eventsHosted: user.eventsHosted || 0,
-        eventsAttended: user.eventsAttended || 0,
-        friendsCount: user.friendsCount || 0,
-        referralRewards: user.referralRewards || 0,
+        eventsHosted: (user as any).eventsHosted || 0,
+        eventsAttended: (user as any).eventsAttended || 0,
+        friendsCount: (user as any).friendsCount || 0,
+        referralRewards: (user as any).referralRewards || 0,
       });
     }
   }, [user]);
@@ -98,10 +98,17 @@ export default function EnhancedProfile() {
   };
 
   const copyReferralCode = async () => {
-    if (!user?.referralCode) return;
+    const referralCode = (user as any)?.referralCode;
+    if (!referralCode) {
+      toast({
+        title: "Referral System Coming Soon!",
+        description: "Your referral code will be available once database migration completes",
+      });
+      return;
+    }
     
     try {
-      await navigator.clipboard.writeText(`https://app.whatsmove.com/?ref=${user.referralCode}`);
+      await navigator.clipboard.writeText(`https://app.whatsmove.com/?ref=${referralCode}`);
       toast({
         title: "Copied!",
         description: "Referral link copied to clipboard",
@@ -331,7 +338,7 @@ export default function EnhancedProfile() {
               </div>
               <Button onClick={copyReferralCode} variant="outline">
                 <Copy className="w-4 h-4 mr-2" />
-                {user.referralCode || "Generate Code"}
+                {(user as any).referralCode || "Coming Soon"}
               </Button>
             </div>
             

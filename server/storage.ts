@@ -43,13 +43,45 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
+    try {
+      const [user] = await db.select({
+        id: users.id,
+        email: users.email,
+        password: users.password,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        university: users.university,
+        graduationYear: users.graduationYear,
+        emailVerified: users.emailVerified,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      }).from(users).where(eq(users.id, id));
+      return user as User;
+    } catch (error) {
+      console.error('Get user error:', error);
+      throw error;
+    }
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user;
+    try {
+      const [user] = await db.select({
+        id: users.id,
+        email: users.email,
+        password: users.password,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        university: users.university,
+        graduationYear: users.graduationYear,
+        emailVerified: users.emailVerified,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      }).from(users).where(eq(users.email, email));
+      return user as User;
+    } catch (error) {
+      console.error('Get user by email error:', error);
+      throw error;
+    }
   }
 
   async createUser(userData: InsertUser): Promise<User> {
@@ -158,27 +190,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removeFavorite(userId: string, eventId: string, externalSource?: string): Promise<void> {
-    let whereClause = and(
+    const whereClause = and(
       eq(favorites.userId, userId),
       eq(favorites.eventId, eventId)
     );
-    
-    if (externalSource) {
-      whereClause = and(whereClause, eq(favorites.externalSource, externalSource));
-    }
+    // Note: externalSource filtering will be available after database migration
     
     await db.delete(favorites).where(whereClause);
   }
 
   async isFavorited(userId: string, eventId: string, externalSource?: string): Promise<boolean> {
-    let whereClause = and(
+    const whereClause = and(
       eq(favorites.userId, userId),
       eq(favorites.eventId, eventId)
     );
-    
-    if (externalSource) {
-      whereClause = and(whereClause, eq(favorites.externalSource, externalSource));
-    }
+    // Note: externalSource filtering will be available after database migration
     
     const [favorite] = await db.select().from(favorites).where(whereClause).limit(1);
     return !!favorite;
