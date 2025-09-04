@@ -15,6 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { z } from "zod";
 import PaymentCheckout from "./payment-checkout";
+import { useAuth } from "@/hooks/useAuth";
 
 const createEventSchema = insertEventSchema.extend({
   startDate: z.string().min(1, "Start date is required"),
@@ -29,6 +30,38 @@ export default function CreateEvent() {
   const queryClient = useQueryClient();
   const [showPayment, setShowPayment] = useState(false);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Redirect to login if not authenticated
+  if (!isLoading && !isAuthenticated) {
+    toast({
+      title: "Login Required",
+      description: "You need to be logged in to create events. Redirecting...",
+      variant: "destructive",
+    });
+    setTimeout(() => {
+      window.location.href = "/api/login";
+    }, 1000);
+    return (
+      <div className="min-h-screen bg-background p-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p>Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background p-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   const form = useForm<CreateEventData>({
     resolver: zodResolver(createEventSchema),
