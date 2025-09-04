@@ -63,25 +63,31 @@ class TicketmasterService {
     }
 
     try {
+      // Set date range - concerts should show far in advance, parties more recent
+      const now = new Date();
+      const startDate = options.startDate || now.toISOString().split('T')[0];
+      
+      let endDate = options.endDate;
+      if (!endDate) {
+        const months = options.category === 'concerts' ? 12 : 3; // 12 months for concerts, 3 for others
+        const futureDate = new Date(now);
+        futureDate.setMonth(futureDate.getMonth() + months);
+        endDate = futureDate.toISOString().split('T')[0];
+      }
+
       const params = new URLSearchParams({
         apikey: this.apiKey,
         latlong: `${latitude},${longitude}`,
         radius: radius.toString(),
         unit: "miles",
-        size: "50",
+        size: "100",
         sort: "date,asc",
+        startDateTime: `${startDate}T00:00:00Z`,
+        endDateTime: `${endDate}T23:59:59Z`,
       });
 
       if (options.keyword) {
         params.append("keyword", options.keyword);
-      }
-
-      if (options.startDate) {
-        params.append("startDateTime", `${options.startDate}T00:00:00Z`);
-      }
-
-      if (options.endDate) {
-        params.append("endDateTime", `${options.endDate}T23:59:59Z`);
       }
 
       // Map categories to Ticketmaster classifications
@@ -97,6 +103,9 @@ class TicketmasterService {
         if (classification) {
           params.append("classificationName", classification);
         }
+      } else {
+        // If no category specified, focus on music and sports (most relevant for college)
+        params.append("classificationName", "music,sports");
       }
 
       const response = await fetch(`${this.baseUrl}/events.json?${params}`);

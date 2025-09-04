@@ -33,6 +33,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (lat && lng) {
         // Ticketmaster events
         try {
+          console.log(`Searching Ticketmaster for events near ${lat}, ${lng} with category: ${category}`);
           const ticketmasterEvents = await ticketmasterService.searchEventsByLocation(
             parseFloat(lat as string),
             parseFloat(lng as string),
@@ -44,6 +45,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               category: category as string,
             }
           );
+          console.log(`Found ${ticketmasterEvents.length} Ticketmaster events`);
           events.push(...ticketmasterEvents);
         } catch (error) {
           console.error("Ticketmaster API error:", error);
@@ -77,9 +79,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             endDate: endDate as string,
           }
         );
+        console.log(`Found ${userEvents.length} user events`);
         events.push(...userEvents);
       }
 
+      console.log(`Total events found: ${events.length}`);
       res.json({ events });
     } catch (error) {
       console.error("Error searching events:", error);
