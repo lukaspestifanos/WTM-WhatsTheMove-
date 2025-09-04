@@ -85,11 +85,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(userData: InsertUser): Promise<User> {
+    // Only insert fields that exist in the current database schema
+    const safeUserData = {
+      id: userData.id,
+      email: userData.email,
+      password: userData.password,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      university: userData.university,
+      graduationYear: userData.graduationYear,
+      emailVerified: userData.emailVerified,
+      createdAt: userData.createdAt,
+      updatedAt: userData.updatedAt,
+    };
+
     const [user] = await db
       .insert(users)
-      .values(userData)
+      .values(safeUserData)
       .returning();
-    return user;
+    return user as User;
   }
 
   async updateUser(id: string, updates: Partial<User>): Promise<User> {

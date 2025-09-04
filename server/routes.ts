@@ -1,9 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { authMiddleware as requireAuth } from "./middleware/auth";
-import authRoutes from "./routes/auth";
-import profileRoutes from "./routes/profile";
+import { requireAuth, setupAuth } from "./auth";
+// Removed conflicting JWT auth system
 import { insertEventSchema, insertRsvpSchema, insertFavoriteSchema } from "@shared/schema";
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -26,11 +25,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
   app.use(cookieParser());
 
-  // Auth routes
-  app.use('/api', authRoutes);
-  
-  // Profile routes
-  app.use('/api/user', profileRoutes);
+  // Setup Passport authentication system 
+  setupAuth(app);
+
+  // User profile routes (protected)
+  app.get('/api/user/profile', requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User ID not found' });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      // Remove sensitive data
+      const { password, ...userProfile } = user;
+      res.json(userProfile);
+    } catch (error) {
+      console.error('Get user profile error:', error);
+      res.status(500).json({ error: 'Failed to get user profile' });
+    }
+  });
+
+  app.put('/api/user/profile', requireAuth, async (req, res) => {
+    try {
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User ID not found' });
+      }
+
+      const updateData = req.body;
+      // Remove sensitive fields that shouldn't be updated via this endpoint
+      delete updateData.password;
+      delete updateData.id;
+      delete updateData.createdAt;
+
+      const updatedUser = await storage.updateUser(userId, updateData);
+      if (!updatedUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Remove sensitive data
+      const { password, ...userProfile } = updatedUser;
+      res.json(userProfile);
+    } catch (error) {
+      console.error('Update user profile error:', error);
+      res.status(500).json({ error: 'Failed to update user profile' });
+    }
+  });
 
   // Events routes (public access)
   app.get("/api/events/search", async (req, res) => {

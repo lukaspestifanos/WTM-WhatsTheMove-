@@ -13,33 +13,19 @@ import {
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users
+// Users - EXACTLY matches current database schema only
 export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").notNull().unique(),
   password: varchar("password").notNull(),
-  firstName: varchar("first_name").notNull(),
-  lastName: varchar("last_name").notNull(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
   university: varchar("university"),
   graduationYear: integer("graduation_year"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
   emailVerified: boolean("email_verified").default(false),
-  profileImageUrl: varchar("profile_image_url"),
-  bio: text("bio"),
-  instagramHandle: varchar("instagram_handle"),
-  twitterHandle: varchar("twitter_handle"),
-  isPublicProfile: boolean("is_public_profile").default(true),
-  friendsCount: integer("friends_count").default(0),
-  eventsHosted: integer("events_hosted").default(0),
-  eventsAttended: integer("events_attended").default(0),
-  referralCode: varchar("referral_code").unique(),
-  referredBy: uuid("referred_by"),
-  referralRewards: integer("referral_rewards").default(0), // Points for referring friends
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
-    .defaultNow()
-    .notNull(),
 });
 
 // Events
