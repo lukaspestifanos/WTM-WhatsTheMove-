@@ -5,6 +5,14 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { insertEventSchema, insertRsvpSchema, insertCommentSchema, insertMediaSchema } from "@shared/schema";
 import { ticketmasterService } from "./services/ticketmaster";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import Stripe from "stripe";
+
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
+}
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2025-08-27.basil",
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -104,12 +112,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create payment intent for event hosting fee
+  app.post("/api/create-event-payment", isAuthenticated, async (req: any, res) => {
+    try {
+      const PLATFORM_FEE = 5.00; // $5 platform fee for hosting events
+      
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(PLATFORM_FEE * 100), // Convert to cents
+        currency: "usd",
+        metadata: {
+          type: "event_hosting_fee",
+          userId: req.user.claims.sub,
+        },
+      });
+      
+      res.json({ 
+        clientSecret: paymentIntent.client_secret,
+        platformFee: PLATFORM_FEE
+      });
+    } catch (error: any) {
+      console.error("Error creating payment intent:", error);
+      res.status(500).json({ message: "Error creating payment intent: " + error.message });
+    }
+  });
+
   app.post("/api/events", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const { stripePaymentIntentId, ...eventBody } = req.body;
+      
+      // Verify payment if paymentIntentId is provided
+      let isPaid = false;
+      let platformFee = 0;
+      
+      if (stripePaymentIntentId) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(stripePaymentIntentId);
+          if (paymentIntent.status === 'succeeded' && paymentIntent.metadata?.userId === userId) {
+            isPaid = true;
+            platformFee = paymentIntent.amount / 100; // Convert from cents
+          }
+        } catch (error) {
+          console.error("Error verifying payment:", error);
+          return res.status(400).json({ message: "Invalid payment" });
+        }
+      }
+      
       const eventData = insertEventSchema.parse({
-        ...req.body,
+        ...eventBody,
         hostId: userId,
+        isPaid,
+        platformFee,
+        stripePaymentIntentId,
       });
       
       const event = await storage.createEvent(eventData);

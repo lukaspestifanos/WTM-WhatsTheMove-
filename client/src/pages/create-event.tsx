@@ -14,6 +14,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { z } from "zod";
+import PaymentCheckout from "./payment-checkout";
 
 const createEventSchema = insertEventSchema.extend({
   startDate: z.string().min(1, "Start date is required"),
@@ -26,6 +27,8 @@ export default function CreateEvent() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
   const form = useForm<CreateEventData>({
     resolver: zodResolver(createEventSchema),
@@ -50,6 +53,7 @@ export default function CreateEvent() {
       return await apiRequest("POST", "/api/events", {
         ...eventData,
         startDate: startDateTime,
+        stripePaymentIntentId: paymentIntentId,
       });
     },
     onSuccess: () => {
@@ -82,7 +86,26 @@ export default function CreateEvent() {
   });
 
   const onSubmit = (data: CreateEventData) => {
+    // Show payment form if no payment has been made
+    if (!paymentIntentId) {
+      setShowPayment(true);
+      return;
+    }
+    
     createEventMutation.mutate(data);
+  };
+
+  const handlePaymentSuccess = (intentId: string) => {
+    setPaymentIntentId(intentId);
+    setShowPayment(false);
+    toast({
+      title: "Payment Successful",
+      description: "You can now create your event!",
+    });
+  };
+
+  const handlePaymentCancel = () => {
+    setShowPayment(false);
   };
 
   return (
@@ -285,14 +308,26 @@ export default function CreateEvent() {
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                       Creating...
                     </>
-                  ) : (
+                  ) : paymentIntentId ? (
                     "Create Event"
+                  ) : (
+                    "Pay Platform Fee & Create Event"
                   )}
                 </Button>
               </form>
             </Form>
           </CardContent>
         </Card>
+        
+        {/* Payment Modal */}
+        {showPayment && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <PaymentCheckout 
+              onPaymentSuccess={handlePaymentSuccess}
+              onCancel={handlePaymentCancel}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

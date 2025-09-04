@@ -58,6 +58,10 @@ export const events = pgTable("events", {
   imageUrl: varchar("image_url"),
   venueId: varchar("venue_id"),
   venueName: varchar("venue_name"),
+  // Payment fields for monetization
+  platformFee: real("platform_fee").default(0), // Fee charged to host
+  isPaid: boolean("is_paid").default(false), // Whether host paid the platform fee
+  stripePaymentIntentId: varchar("stripe_payment_intent_id"), // Stripe payment reference
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

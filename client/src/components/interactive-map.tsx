@@ -37,7 +37,7 @@ export default function InteractiveMap({ userLocation, events, onEventClick }: I
 
     // Initialize map with dark theme
     const map = L.map(mapRef.current, {
-      zoomControl: true,
+      zoomControl: false, // Disable +/- zoom controls, pinch-to-zoom still works
       attributionControl: false,
     });
 
