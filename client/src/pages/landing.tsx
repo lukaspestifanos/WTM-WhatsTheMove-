@@ -2,8 +2,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 export default function Landing() {
-  const handleLogin = () => {
-    window.location.href = "/auth";
+  const handleGetStarted = () => {
+    window.location.href = "/";
   };
 
   return (
@@ -44,15 +44,15 @@ export default function Landing() {
           </div>
 
           <Button 
-            onClick={handleLogin}
+            onClick={handleGetStarted}
             className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-3 rounded-xl font-semibold text-lg shadow-lg"
-            data-testid="button-login"
+            data-testid="button-get-started"
           >
             Get Started
           </Button>
           
-          <p className="text-sm text-gray-500 mt-4" data-testid="text-login-note">
-            Sign in with your account to continue
+          <p className="text-sm text-gray-500 mt-4" data-testid="text-browse-note">
+            Browse events now, sign up later to create your own
           </p>
         </CardContent>
       </Card>

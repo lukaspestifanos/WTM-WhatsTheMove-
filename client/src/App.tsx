@@ -29,21 +29,23 @@ function Router() {
 
   return (
     <Switch>
-      {/* Public routes */}
+      {/* Public routes - accessible by everyone */}
       <Route path="/auth" component={AuthPage} />
+      <Route path="/landing" component={Landing} />
+      <Route path="/" component={Home} />
+      <Route path="/events/:id" component={EventDetails} />
       
-      {/* Protected routes */}
+      {/* Protected routes - require authentication */}
       {isAuthenticated ? (
         <>
-          <Route path="/" component={Home} />
           <Route path="/create-event" component={CreateEvent} />
-          <Route path="/events/:id" component={EventDetails} />
           <Route path="/my-events" component={MyEvents} />
           <Route path="/friends" component={Friends} />
           <Route path="/profile" component={Profile} />
         </>
       ) : (
-        <Route path="/" component={Landing} />
+        /* Redirect non-authenticated users trying to access protected routes */
+        null
       )}
       
       <Route component={NotFound} />

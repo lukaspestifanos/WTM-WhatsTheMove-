@@ -42,10 +42,9 @@ export default function CreateEvent() {
         description: "You need to be logged in to create events. Redirecting...",
         variant: "destructive",
       });
-      // Use a more reliable redirect method for preview testing
+      // Redirect to auth page
       setTimeout(() => {
-        const loginUrl = new URL("/api/login", window.location.origin);
-        window.location.assign(loginUrl.toString());
+        window.location.href = "/auth";
       }, 1000);
     }
   }, [isAuthenticated, isLoading, redirectingToLogin]);
