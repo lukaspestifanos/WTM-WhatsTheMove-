@@ -94,9 +94,10 @@ class TicketmasterService {
       if (options.category) {
         const categoryMap: Record<string, string> = {
           parties: "music",
-          concerts: "music",
+          concerts: "music", 
           sports: "sports",
           social: "miscellaneous",
+          restaurants: "miscellaneous",
         };
         
         const classification = categoryMap[options.category.toLowerCase()];
@@ -104,8 +105,8 @@ class TicketmasterService {
           params.append("classificationName", classification);
         }
       } else {
-        // If no category specified, focus on music and sports (most relevant for college)
-        params.append("classificationName", "music,sports");
+        // If no category specified, get ALL types of events for more scrollable content
+        params.append("classificationName", "music,sports,arts,miscellaneous,film");
       }
 
       const response = await fetch(`${this.baseUrl}/events.json?${params}`);
@@ -158,8 +159,10 @@ class TicketmasterService {
     
     const categoryMap: Record<string, string> = {
       music: "concerts",
-      sports: "sports",
+      sports: "sports", 
       "arts & theatre": "social",
+      arts: "social",
+      film: "social",
       miscellaneous: "social",
     };
     
