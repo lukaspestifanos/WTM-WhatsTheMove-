@@ -182,9 +182,12 @@ export default function Home() {
         
         {/* Sheet Header */}
         <div className="px-6 pb-4 flex-shrink-0">
-          <h2 className="text-2xl font-bold text-foreground mb-2" data-testid="text-page-title">
+          <h2 className="text-2xl font-bold text-foreground mb-1" data-testid="text-page-title">
             What's the Move?
           </h2>
+          <p className="text-lg font-medium text-muted-foreground mb-3" data-testid="text-subtitle">
+            A Split Concept
+          </p>
           <div className="flex items-center space-x-4 text-sm text-muted-foreground">
             <span data-testid="text-event-count">
               {eventsLoading ? "Loading..." : `${events.length} events`}
