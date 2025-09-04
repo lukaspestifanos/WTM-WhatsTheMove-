@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { User, Users, Settings, LogOut, LogIn } from "lucide-react";
 import type { User as UserType } from "@shared/schema";
 
@@ -38,6 +38,9 @@ export function HamburgerMenu() {
       <DialogContent className="w-80 h-full max-h-screen p-6 data-[side=left]:slide-in-from-left-0">
         <DialogHeader className="mb-6">
           <DialogTitle className="text-left">What's the Move?</DialogTitle>
+          <DialogDescription className="text-left text-sm text-muted-foreground">
+            Campus event discovery and social features
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">
@@ -128,16 +131,19 @@ export function HamburgerMenu() {
                 </Button>
               </div>
 
-              {/* Limited Guest Features */}
-              <div className="space-y-2">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => setIsOpen(false)}
-                  data-testid="button-about"
-                >
-                  About What's the Move
-                </Button>
+              {/* About Section */}
+              <div className="space-y-3">
+                <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border-l-4 border-blue-500">
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    About What's the Move
+                  </h3>
+                  <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
+                    Your go-to campus event discovery app! Find parties, concerts, study groups, and social events happening around your college. Browse freely as a guest or create an account to host your own events and connect with friends.
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-300 mt-2 font-medium">
+                    A Split Concept
+                  </p>
+                </div>
               </div>
             </>
           )}
