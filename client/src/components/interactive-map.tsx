@@ -112,12 +112,11 @@ export default function InteractiveMap({ userLocation, events, onEventClick }: I
       if (event.latitude && event.longitude) {
         const eventIcon = L.divIcon({
           className: 'event-marker',
-          html: `<div class="w-8 h-8 bg-white rounded-full border-2 border-gray-300 shadow-lg hover:scale-125 transition-all duration-200 cursor-pointer z-50 flex items-center justify-center">
-                   <span class="text-xl">${getCategoryEmoji(event.category)}</span>
-                   <div class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+          html: `<div class="hover:scale-125 transition-all duration-200 cursor-pointer z-50">
+                   <span class="text-2xl" style="font-family: 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">${getCategoryEmoji(event.category)}</span>
                  </div>`,
-          iconSize: [32, 32],
-          iconAnchor: [16, 16],
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
         });
 
         const marker = L.marker([event.latitude, event.longitude], { icon: eventIcon })
