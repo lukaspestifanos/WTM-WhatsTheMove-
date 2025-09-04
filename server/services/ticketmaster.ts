@@ -132,25 +132,28 @@ class TicketmasterService {
     const venue = event._embedded?.venues?.[0];
     const image = event.images?.find(img => img.width >= 300)?.url || event.images?.[0]?.url;
     
-    // Enhanced price extraction logic
-    let price = 0;
+    // Enhanced price extraction logic with range support
+    let minPrice = 0;
+    let maxPrice = 0;
+    
     if (event.priceRanges && event.priceRanges.length > 0) {
-      // Look through all price ranges to find the best pricing info
+      // Extract all valid price ranges
       const validPrices = event.priceRanges
         .filter(range => range.min && range.min > 0)
-        .map(range => range.min);
+        .flatMap(range => [range.min, range.max].filter(p => p && p > 0));
       
       if (validPrices.length > 0) {
-        price = Math.min(...validPrices); // Use the lowest available price
+        minPrice = Math.min(...validPrices);
+        maxPrice = Math.max(...validPrices);
       }
     }
     
     // If no price ranges, check for other pricing fields that might be available
-    if (price === 0 && event.accessibility?.info?.includes('$')) {
+    if (minPrice === 0 && event.accessibility?.info?.includes('$')) {
       // Sometimes pricing info is in accessibility info
       const priceMatch = event.accessibility.info.match(/\$(\d+(?:\.\d{2})?)/);
       if (priceMatch) {
-        price = parseFloat(priceMatch[1]);
+        minPrice = maxPrice = parseFloat(priceMatch[1]);
       }
     }
 
@@ -163,7 +166,9 @@ class TicketmasterService {
       location: venue?.name || "TBA",
       latitude: venue?.location?.latitude ? parseFloat(venue.location.latitude) : null,
       longitude: venue?.location?.longitude ? parseFloat(venue.location.longitude) : null,
-      price: price,
+      price: minPrice, // Keep for backward compatibility
+      minPrice: minPrice,
+      maxPrice: maxPrice,
       imageUrl: image,
       externalId: event.id,
       externalSource: "ticketmaster",

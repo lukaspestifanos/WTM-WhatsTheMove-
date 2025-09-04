@@ -16,6 +16,8 @@ interface Event {
   startDate: string;
   location: string;
   price?: number;
+  minPrice?: number;
+  maxPrice?: number;
   imageUrl?: string;
   venueName?: string;
   hostName?: string;
@@ -27,6 +29,21 @@ interface Event {
 interface EventCardProps {
   event: Event;
   onEventClick: (eventId: string) => void;
+}
+
+// Helper function to format price display
+function formatPriceDisplay(event: Event, buttonPrefix: string): string {
+  const minPrice = event.minPrice || event.price || 0;
+  const maxPrice = event.maxPrice || event.price || 0;
+  
+  if (minPrice > 0 && maxPrice > 0) {
+    if (minPrice === maxPrice) {
+      return `${buttonPrefix} $${minPrice.toFixed(2)}`;
+    } else {
+      return `${buttonPrefix} $${minPrice.toFixed(2)}-$${maxPrice.toFixed(2)}`;
+    }
+  }
+  return buttonPrefix === "Get Tickets" ? "Get Tickets" : "RSVP Free";
 }
 
 export default function EventCard({ event, onEventClick }: EventCardProps) {
@@ -227,9 +244,9 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
               Loading...
             </>
           ) : event.externalSource ? (
-            event.price && event.price > 0 ? `Get Tickets $${event.price}` : "Get Tickets"
+            formatPriceDisplay(event, "Get Tickets")
           ) : (
-            event.price && event.price > 0 ? `RSVP $${event.price}` : "RSVP Free"
+            formatPriceDisplay(event, "RSVP")
           )}
         </Button>
         <Button 

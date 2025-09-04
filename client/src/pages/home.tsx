@@ -23,6 +23,8 @@ interface Event {
   latitude?: number;
   longitude?: number;
   price?: number;
+  minPrice?: number;
+  maxPrice?: number;
   imageUrl?: string;
   venueName?: string;
   hostName?: string;

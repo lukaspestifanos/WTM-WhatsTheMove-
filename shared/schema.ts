@@ -52,6 +52,8 @@ export const events = pgTable("events", {
   hostId: varchar("host_id").references(() => users.id),
   maxAttendees: integer("max_attendees"),
   price: real("price").default(0),
+  minPrice: real("min_price").default(0),
+  maxPrice: real("max_price").default(0),
   isPublic: boolean("is_public").default(true),
   externalId: varchar("external_id"), // For Ticketmaster/Meetup events
   externalSource: varchar("external_source"), // 'ticketmaster', 'meetup', 'user'
