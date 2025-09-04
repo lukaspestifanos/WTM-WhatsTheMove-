@@ -132,10 +132,32 @@ export default function Home() {
           userLocation={userLocation}
           events={events}
           onEventClick={(eventId) => {
-            // For external events (Ticketmaster), open their URL directly
+            // For external events (Ticketmaster), try to open in app first
             const event = events.find(e => e.id === eventId);
             if (event?.externalSource && event?.url) {
-              window.open(event.url, "_blank");
+              if (event.externalSource === 'ticketmaster') {
+                // Try to open Ticketmaster app using deep link
+                try {
+                  const appUrl = event.url.replace('https://www.ticketmaster.com', 'ticketmaster://');
+                  const iframe = document.createElement('iframe');
+                  iframe.style.display = 'none';
+                  iframe.src = appUrl;
+                  document.body.appendChild(iframe);
+                  
+                  setTimeout(() => {
+                    document.body.removeChild(iframe);
+                  }, 1000);
+                  
+                  // Fallback to web after a delay if app doesn't open
+                  setTimeout(() => {
+                    window.open(event.url!, "_blank");
+                  }, 1500);
+                } catch (error) {
+                  window.open(event.url, "_blank");
+                }
+              } else {
+                window.open(event.url, "_blank");
+              }
             } else {
               // For user events, go to event details page
               setLocation(`/events/${eventId}`);

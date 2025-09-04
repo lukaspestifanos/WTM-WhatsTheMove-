@@ -96,7 +96,11 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
   const rsvpMutation = useMutation({
     mutationFn: async () => {
       if (event.externalSource && event.url) {
-        window.open(event.url, "_blank");
+        if (event.externalSource === 'ticketmaster') {
+          openTicketmasterApp(event.url);
+        } else {
+          window.open(event.url, "_blank");
+        }
         return;
       }
       return await apiRequest("POST", `/api/events/${event.id}/rsvp`, { status: "attending" });
@@ -176,10 +180,40 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
     }
   };
 
+  const openTicketmasterApp = (url: string) => {
+    try {
+      // Try to open Ticketmaster app using deep link
+      const appUrl = url.replace('https://www.ticketmaster.com', 'ticketmaster://');
+      
+      // Create a hidden iframe to attempt deep link
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = appUrl;
+      document.body.appendChild(iframe);
+      
+      // Remove iframe after a short delay
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 1000);
+      
+      // Fallback to web after a delay if app doesn't open
+      setTimeout(() => {
+        window.open(url, "_blank");
+      }, 1500);
+    } catch (error) {
+      // If anything fails, just open the web URL
+      window.open(url, "_blank");
+    }
+  };
+
   const handleCardClick = () => {
-    // For external events (Ticketmaster), redirect to their website
+    // For external events (Ticketmaster), try to open in app first
     if (event.externalSource && event.url) {
-      window.open(event.url, "_blank");
+      if (event.externalSource === 'ticketmaster') {
+        openTicketmasterApp(event.url);
+      } else {
+        window.open(event.url, "_blank");
+      }
       return;
     }
     // For user events, go to event details page
