@@ -137,6 +137,14 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
 
   const handleRsvp = (e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // For external events (Ticketmaster, etc.), allow guest access - no login required
+    if (event.externalSource && event.url) {
+      rsvpMutation.mutate();
+      return;
+    }
+    
+    // For user-created events, require authentication
     if (!isAuthenticated) {
       toast({
         title: "Please log in",
@@ -145,6 +153,7 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
       });
       return;
     }
+    
     rsvpMutation.mutate();
   };
 
