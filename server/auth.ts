@@ -10,7 +10,7 @@ import MemoryStore from "memorystore";
 
 declare global {
   namespace Express {
-    interface User extends Omit<User, 'password'> {}
+    interface User extends Omit<UserType, 'password'> {}
   }
 }
 

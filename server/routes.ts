@@ -1,8 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, requireAuth } from "./auth";
+import { authMiddleware as requireAuth } from "./middleware/auth";
+import authRoutes from "./routes/auth";
 import { insertEventSchema, insertRsvpSchema, insertCommentSchema, insertMediaSchema, insertFavoriteSchema } from "@shared/schema";
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { ticketmasterService } from "./services/ticketmaster";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import Stripe from "stripe";
@@ -15,10 +18,15 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware
-  setupAuth(app);
+  // Basic middleware
+  app.use(cors({
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    credentials: true,
+  }));
+  app.use(cookieParser());
 
-  // Auth routes are now handled in setupAuth() function in auth.ts
+  // Auth routes
+  app.use('/api', authRoutes);
 
   // Events routes (public access)
   app.get("/api/events/search", async (req, res) => {
@@ -94,8 +102,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // For authenticated users, add favorite status and sort favorites first
-      if (req.user?.id) {
-        const userId = req.user.id;
+      if ((req as any).userId) {
+        const userId = (req as any).userId;
         
         // Add favorite status to each event
         const eventsWithFavorites = await Promise.all(
