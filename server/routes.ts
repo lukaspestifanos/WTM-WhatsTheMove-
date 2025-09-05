@@ -2,8 +2,6 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { requireAuth, setupAuth } from "./auth";
-import authRoutes from "./routes/auth";
-import { authMiddleware } from "./middleware/auth";
 // Removed conflicting JWT auth system
 import { insertEventSchema, insertRsvpSchema, insertFavoriteSchema } from "@shared/schema";
 import cors from 'cors';
@@ -27,16 +25,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
   app.use(cookieParser());
 
-  // Setup Passport authentication system - DISABLED (using JWT instead)
-  // setupAuth(app);
-
-  // Use JWT-based authentication routes
-  app.use('/api', authRoutes);
+  // Setup Passport authentication system 
+  setupAuth(app);
 
   // User profile routes (protected)
-  app.get('/api/user/profile', authMiddleware, async (req, res) => {
+  app.get('/api/user/profile', requireAuth, async (req, res) => {
     try {
-      const userId = (req as any).userId;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ error: 'User ID not found' });
       }
@@ -55,9 +50,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/user/profile', authMiddleware, async (req, res) => {
+  app.put('/api/user/profile', requireAuth, async (req, res) => {
     try {
-      const userId = (req as any).userId;
+      const userId = (req.user as any)?.id;
       if (!userId) {
         return res.status(401).json({ error: 'User ID not found' });
       }
@@ -225,7 +220,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create payment intent for event hosting fee
-  app.post("/api/create-event-payment", authMiddleware, async (req: any, res) => {
+  app.post("/api/create-event-payment", requireAuth, async (req: any, res) => {
     try {
       const PLATFORM_FEE = 5.00; // $5 platform fee for hosting events
       
@@ -248,9 +243,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/events", authMiddleware, async (req: any, res) => {
+  app.post("/api/events", requireAuth, async (req: any, res) => {
     try {
-      const userId = (req as any).userId;
+      const userId = (req.user as any)?.id;
       const { stripePaymentIntentId, ...eventBody } = req.body;
       
       // Verify payment if paymentIntentId is provided
@@ -336,9 +331,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/events/:id/rsvp", authMiddleware, async (req: any, res) => {
+  app.post("/api/events/:id/rsvp", requireAuth, async (req: any, res) => {
     try {
-      const userId = (req as any).userId;
+      const userId = (req.user as any)?.id;
       const rsvpData = insertRsvpSchema.parse({
         eventId: req.params.id,
         userId,
@@ -356,9 +351,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/user/events", authMiddleware, async (req: any, res) => {
+  app.get("/api/user/events", requireAuth, async (req: any, res) => {
     try {
-      const userId = (req as any).userId;
+      const userId = (req.user as any)?.id;
       const events = await storage.getUserEvents(userId);
       res.json(events);
     } catch (error) {
@@ -405,9 +400,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/events/:id/comments", authMiddleware, async (req: any, res) => {
+  app.post("/api/events/:id/comments", requireAuth, async (req: any, res) => {
     try {
-      const userId = (req as any).userId;
+      const userId = (req.user as any)?.id;
       const commentData = insertCommentSchema.parse({
         eventId: req.params.id,
         userId,
@@ -509,9 +504,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/media", authMiddleware, async (req: any, res) => {
+  app.post("/api/media", requireAuth, async (req: any, res) => {
     try {
-      const userId = (req as any).userId;
+      const userId = (req.user as any)?.id;
       const { eventId, commentId, type, url, filename, fileSize } = req.body;
 
       const objectStorageService = new ObjectStorageService();
@@ -539,9 +534,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Favorites endpoints
-  app.post("/api/events/:id/favorite", authMiddleware, async (req: any, res) => {
+  app.post("/api/events/:id/favorite", requireAuth, async (req: any, res) => {
     try {
-      const userId = (req as any).userId;
+      const userId = (req.user as any)?.id;
       const eventId = req.params.id;
       const { externalSource } = req.body;
       
@@ -576,9 +571,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/user/favorites", authMiddleware, async (req: any, res) => {
+  app.get("/api/user/favorites", requireAuth, async (req: any, res) => {
     try {
-      const userId = (req as any).userId;
+      const userId = (req.user as any)?.id;
       const favorites = await storage.getUserFavorites(userId);
       res.json(favorites);
     } catch (error) {
