@@ -139,32 +139,9 @@ export default function Home() {
 
 
   const handleEventClick = (eventId: string) => {
-    const event = events.find(e => e.id === eventId);
-
-    if (event?.externalSource && event?.url) {
-      // External event (like Ticketmaster)
-      if (event.externalSource === 'ticketmaster') {
-        // Try to open Ticketmaster app first
-        const appUrl = event.url.replace('https://www.ticketmaster.com', 'ticketmaster://');
-        const webUrl = event.url;
-
-        // Try app link
-        const appWindow = window.open(appUrl, '_blank');
-
-        // If app doesn't open, fallback to web
-        setTimeout(() => {
-          if (!appWindow || appWindow.closed) {
-            window.open(webUrl, '_blank', 'noopener,noreferrer');
-          }
-        }, 1500);
-      } else {
-        // Other external sources
-        window.open(event.url, '_blank', 'noopener,noreferrer');
-      }
-    } else {
-      // Internal event - navigate to details page
-      setLocation(`/events/${eventId}`);
-    }
+    // Always navigate to internal event details page
+    // Users can access external links from the details page if needed
+    setLocation(`/events/${eventId}`);
   };
 
   const handleCenterOnLocation = () => {

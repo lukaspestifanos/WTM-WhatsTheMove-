@@ -34,9 +34,28 @@ export default function EventDetails() {
     content: "",
   });
 
+  // Try to get event from search cache first, then fetch if not available
   const { data: event, isLoading, error } = useQuery({
     queryKey: ["/api/events", id],
     enabled: !!id,
+    queryFn: async () => {
+      // First check if we have this event in our search results cache
+      const searchCache = queryClient.getQueryData(["/api/events/search"]);
+      const cachedEvent = searchCache?.events?.find((e: any) => e.id === id);
+      
+      if (cachedEvent) {
+        console.log('Using cached event data for', id);
+        return cachedEvent;
+      }
+      
+      // If not in cache, fetch from API
+      console.log('Fetching event data from API for', id);
+      const response = await fetch(`/api/events/${id}`);
+      if (!response.ok) {
+        throw new Error('Event not found');
+      }
+      return response.json();
+    }
   });
 
   const { data: rsvps } = useQuery({

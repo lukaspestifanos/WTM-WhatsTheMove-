@@ -193,11 +193,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/events/:id", async (req, res) => {
     try {
+      // First try to get from database (user-created events)
       const event = await storage.getEvent(req.params.id);
-      if (!event) {
-        return res.status(404).json({ message: "Event not found" });
+      if (event) {
+        return res.json(event);
       }
-      res.json(event);
+
+      // If not found in database, try to get from external sources
+      // For now, return a standard "external event" response
+      // In a real app, we'd cache external events or fetch from their APIs
+      const externalEventPlaceholder = {
+        id: req.params.id,
+        title: "Event Details",
+        description: "This event is managed by an external provider. Please check the original source for complete details.",
+        category: "external",
+        startDate: new Date().toISOString(),
+        location: "External Event",
+        isExternal: true,
+      };
+
+      res.json(externalEventPlaceholder);
     } catch (error) {
       console.error("Error fetching event:", error);
       res.status(500).json({ message: "Failed to fetch event" });
