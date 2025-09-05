@@ -141,14 +141,14 @@ export function setupAuth(app: Express) {
     });
   });
 
-  // Get current user endpoint
-  app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated() || !req.user) {
-      return res.status(401).json({ message: "Not authenticated" });
-    }
-    
-    res.json(req.user);
-  });
+  // Get current user endpoint - DISABLED (using JWT version in routes/auth.ts)
+  // app.get("/api/user", (req, res) => {
+  //   if (!req.isAuthenticated() || !req.user) {
+  //     return res.status(401).json({ message: "Not authenticated" });
+  //   }
+  //   
+  //   res.json(req.user);
+  // });
 }
 
 // Middleware to check authentication
