@@ -133,16 +133,18 @@ export default function AuthPage() {
       // Remove confirmPassword before sending to backend
       const { confirmPassword, ...registerData } = data;
 
-      await registerMutation.mutateAsync(registerData);
+      const newUser = await registerMutation.mutateAsync(registerData);
 
-      // Success - might auto-login or need manual login
+      // Success - user is automatically logged in
       toast({
         title: "Account Created!",
         description: "Welcome to What's the Move!",
       });
 
-      // Success - user should be logged in automatically
-      // Let the useEffect handle the redirect
+      // Force immediate redirect to home page
+      setTimeout(() => {
+        setLocation('/');
+      }, 500); // Small delay to let the toast show
 
     } catch (error: any) {
       console.error('Registration error:', error);
