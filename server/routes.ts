@@ -582,6 +582,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Push notification endpoints
+  app.post("/api/notifications/subscribe", async (req, res) => {
+    try {
+      const subscription = req.body;
+      console.log('New push subscription:', subscription);
+      
+      // In a real app, store subscription in database with user ID
+      // For now, just acknowledge the subscription
+      res.status(200).json({ message: "Subscription received" });
+    } catch (error) {
+      console.error("Error storing subscription:", error);
+      res.status(500).json({ message: "Failed to store subscription" });
+    }
+  });
+
+  app.post("/api/notifications/unsubscribe", async (req, res) => {
+    try {
+      const { endpoint } = req.body;
+      console.log('Unsubscribe request for endpoint:', endpoint);
+      
+      // In a real app, remove subscription from database
+      res.status(200).json({ message: "Unsubscribed successfully" });
+    } catch (error) {
+      console.error("Error unsubscribing:", error);
+      res.status(500).json({ message: "Failed to unsubscribe" });
+    }
+  });
+
+  app.post("/api/notifications/send-test", async (req, res) => {
+    try {
+      // In a real app, send actual push notification using web-push library
+      console.log('Test notification requested');
+      
+      // Simulate sending notification
+      setTimeout(() => {
+        console.log('Test notification would be sent now');
+      }, 1000);
+      
+      res.status(200).json({ message: "Test notification sent" });
+    } catch (error) {
+      console.error("Error sending test notification:", error);
+      res.status(500).json({ message: "Failed to send test notification" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

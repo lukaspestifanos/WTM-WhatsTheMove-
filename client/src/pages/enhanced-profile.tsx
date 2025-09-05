@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
 import { ProfileImageUploader } from "@/components/ProfileImageUploader";
+import { NotificationSettings } from "@/components/NotificationSettings";
 import { 
   Share2, 
   Users, 
@@ -385,6 +386,9 @@ export default function EnhancedProfile() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Notification Settings */}
+        <NotificationSettings />
 
         {/* Achievements */}
         <Card>
