@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     mutationFn: async (credentials: LoginData) => {
       const res = await apiRequest("POST", "/api/login", credentials);
       const data = await res.json();
-      return data.user;
+      return data; // Backend returns user directly, not wrapped in .user
     },
     onSuccess: (user: User) => {
       queryClient.setQueryData(["/api/user"], user);
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     mutationFn: async (credentials: RegisterData) => {
       const res = await apiRequest("POST", "/api/register", credentials);
       const data = await res.json();
-      return data.user;
+      return data; // Backend returns user directly, not wrapped in .user
     },
     onSuccess: (user: User) => {
       queryClient.setQueryData(["/api/user"], user);
