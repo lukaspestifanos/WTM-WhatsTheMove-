@@ -9,7 +9,9 @@ import helmet from "helmet";
 import { z } from "zod";
 import { storage } from "./storage";
 import { User as UserType } from "@shared/schema";
-import MemoryStore from "memorystore";
+
+// Fix the MemoryStore import
+const MemoryStore = require("memorystore")(session);
 
 // Enhanced types
 declare global {
@@ -125,7 +127,7 @@ const createRateLimiter = (windowMs: number, max: number, message: string) =>
     // Store failed attempts by IP + email combination for login attempts
     keyGenerator: (req: Request) => {
       // Use the built-in helper for proper IPv6 handling
-      const ip = req.ip || req.connection.remoteAddress || 'unknown';
+      const ip = req.ip || req.connection?.remoteAddress || 'unknown';
       if (req.path === '/api/login' && req.body?.email) {
         return `${ip}-${req.body.email}`;
       }
@@ -144,6 +146,47 @@ const generalLimiter = createRateLimiter(
   100, // General API limit
   'Too many requests, please try again later'
 );
+
+// Enhanced auth middleware - Define early to avoid hoisting issues
+export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({
+      error: "Authentication required",
+      code: "AUTHENTICATION_REQUIRED"
+    });
+  }
+  next();
+}
+
+// Optional auth middleware (doesn't block, but adds user if authenticated)
+export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
+  // Just continue - user will be available if authenticated
+  next();
+}
+
+// Admin role middleware (extend as needed)
+export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({
+      error: "Authentication required",
+      code: "AUTHENTICATION_REQUIRED"
+    });
+  }
+
+  // Add admin check logic here based on your user schema
+  if (!(req.user as any).isAdmin) {
+    logSecurityEvent('admin_access_denied', {
+      userId: req.user.id,
+      ip: req.ip,
+    });
+    return res.status(403).json({
+      error: "Admin access required",
+      code: "ADMIN_ACCESS_REQUIRED"
+    });
+  }
+
+  next();
+}
 
 // Validation middleware
 const validateRequest = (schema: z.ZodSchema) => {
@@ -183,30 +226,56 @@ const createSessionStore = () => {
     console.warn('⚠️ Using memory store in production - consider Redis for scalability');
   }
 
-  const MemStore = MemoryStore(session);
-  return new MemStore({
+  return new MemoryStore({
     checkPeriod: 86400000, // Prune expired entries every 24h
     max: 10000, // Limit memory usage
   });
 };
 
 export function setupAuth(app: Express) {
-  // Security middleware
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
-        imgSrc: ["'self'", "data:", "https:"],
+  // Security middleware - disable CSP in development to allow Vite HMR
+  if (CONFIG.IS_PRODUCTION) {
+    app.use(helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", "data:", "https:"],
+        },
       },
-    },
-  }));
+    }));
+  } else {
+    // Development: disable CSP to allow Vite HMR
+    app.use(helmet({
+      contentSecurityPolicy: false,
+    }));
+  }
 
-  // Apply rate limiting
+  // Add health check endpoint BEFORE rate limiting
+  app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+  
+  // HEAD endpoint to stop the polling storm - ALWAYS return 200
+  app.head('/api', (req, res) => {
+    res.status(200).end();
+  });
+  app.head('/api/health', (req, res) => {
+    res.status(200).end();
+  });
+
+  // Apply rate limiting - exclude HEAD and health endpoints
   app.use('/api/login', authLimiter);
   app.use('/api/register', authLimiter);
-  app.use('/api/', generalLimiter);
+  
+  // More selective rate limiting - exclude health checks
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/api/health' || req.path === '/api' || req.method === 'HEAD') {
+      return next();
+    }
+    generalLimiter(req, res, next);
+  });
 
   // Session configuration
   const sessionSettings: session.SessionOptions = {
@@ -263,8 +332,14 @@ export function setupAuth(app: Express) {
             return done(null, false, { message: "Invalid email or password" });
           }
 
-          // Update last login time
-          await storage.updateUserLastLogin(user.id);
+          // Update last login time if the method exists
+          if (typeof storage.updateUserLastLogin === 'function') {
+            try {
+              await storage.updateUserLastLogin(user.id);
+            } catch (error) {
+              console.warn('Failed to update last login time:', error);
+            }
+          }
 
           logSecurityEvent('login_success', {
             email,
@@ -367,7 +442,7 @@ export function setupAuth(app: Express) {
       });
     } catch (error) {
       logSecurityEvent('registration_error', {
-        email: req.body.email,
+        email: req.body?.email,
         error: error instanceof Error ? error.message : 'Unknown error',
         ip: req.ip,
       });
@@ -487,6 +562,23 @@ export function setupAuth(app: Express) {
       const { currentPassword, newPassword } = req.body;
       const userId = req.user!.id;
 
+      // Check if the storage methods exist before using them
+      if (typeof storage.getUserWithPassword !== 'function') {
+        console.error('storage.getUserWithPassword method not found');
+        return res.status(500).json({
+          error: "Password change feature not available",
+          code: "FEATURE_NOT_AVAILABLE"
+        });
+      }
+
+      if (typeof storage.updateUserPassword !== 'function') {
+        console.error('storage.updateUserPassword method not found');
+        return res.status(500).json({
+          error: "Password change feature not available",
+          code: "FEATURE_NOT_AVAILABLE"
+        });
+      }
+
       // Get user with password
       const user = await storage.getUserWithPassword(userId);
       if (!user) {
@@ -536,45 +628,4 @@ export function setupAuth(app: Express) {
       });
     }
   });
-}
-
-// Enhanced auth middleware
-export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
-  if (!req.isAuthenticated() || !req.user) {
-    return res.status(401).json({
-      error: "Authentication required",
-      code: "AUTHENTICATION_REQUIRED"
-    });
-  }
-  next();
-}
-
-// Optional auth middleware (doesn't block, but adds user if authenticated)
-export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
-  // Just continue - user will be available if authenticated
-  next();
-}
-
-// Admin role middleware (extend as needed)
-export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
-  if (!req.isAuthenticated() || !req.user) {
-    return res.status(401).json({
-      error: "Authentication required",
-      code: "AUTHENTICATION_REQUIRED"
-    });
-  }
-
-  // Add admin check logic here based on your user schema
-  if (!(req.user as any).isAdmin) {
-    logSecurityEvent('admin_access_denied', {
-      userId: req.user.id,
-      ip: req.ip,
-    });
-    return res.status(403).json({
-      error: "Admin access required",
-      code: "ADMIN_ACCESS_REQUIRED"
-    });
-  }
-
-  next();
 }
