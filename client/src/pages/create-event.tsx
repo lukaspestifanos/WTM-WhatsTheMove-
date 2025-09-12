@@ -15,18 +15,39 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, DollarSign, Info, Calendar, MapPin, Users } from "lucide-react";
 import { z } from "zod";
 
-// Simple schema that matches your backend expectations
+// Constants
+const PLATFORM_FEE_RATE = 0.05;
+const MIN_PLATFORM_FEE = 0.50;
+const PROCESSING_FEE_RATE = 0.029;
+const PROCESSING_FEE_FIXED = 0.30;
+
+const EVENT_CATEGORIES = [
+  { value: "parties", label: "🎉 Parties" },
+  { value: "concerts", label: "🎵 Concerts" },
+  { value: "sports", label: "⚽ Sports" },
+  { value: "study", label: "📚 Study Groups" },
+  { value: "social", label: "🍕 Social" },
+] as const;
+
+// Schema
 const createEventSchema = z.object({
-  title: z.string().min(1, "Title is required"),
+  title: z.string().min(1, "Title is required").max(100, "Title too long"),
   description: z.string().optional(),
   category: z.string().min(1, "Category is required"),
-  location: z.string().min(1, "Location is required"),
+  location: z.string().min(1, "Location is required").max(200, "Location too long"),
   startDate: z.string().min(1, "Date is required"),
-  price: z.number().min(0).default(0),
-  maxAttendees: z.number().positive().optional(),
+  price: z.number().min(0, "Price cannot be negative").default(0),
+  maxAttendees: z.number().positive("Must be a positive number").optional(),
 });
 
 type CreateEventData = z.infer<typeof createEventSchema>;
+
+interface FeeCalculation {
+  platformFee: string;
+  processingFee: string;
+  hostEarnings: string;
+  buyerTotal: string;
+}
 
 export default function CreateEvent() {
   const [, setLocation] = useLocation();
@@ -34,18 +55,6 @@ export default function CreateEvent() {
   const queryClient = useQueryClient();
   const { user, isLoading: authLoading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Check auth and redirect if needed
-  useEffect(() => {
-    if (!authLoading && !user) {
-      sessionStorage.setItem('redirectAfterAuth', '/');
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to create an event",
-      });
-      setTimeout(() => setLocation("/register"), 1000);
-    }
-  }, [user, authLoading, toast, setLocation]);
 
   const form = useForm<CreateEventData>({
     resolver: zodResolver(createEventSchema),
@@ -60,106 +69,103 @@ export default function CreateEvent() {
     },
   });
 
+  // Auth check with redirect
+  useEffect(() => {
+    if (!authLoading && !user) {
+      sessionStorage.setItem('redirectAfterAuth', '/');
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to create an event",
+      });
+      setTimeout(() => setLocation("/register"), 1000);
+    }
+  }, [user, authLoading, toast, setLocation]);
+
+  // Fee calculation utility
+  const calculateFees = (price: number): FeeCalculation | null => {
+    if (price === 0) return null;
+
+    const platformFee = Math.max(price * PLATFORM_FEE_RATE, MIN_PLATFORM_FEE);
+    const processingFee = (price * PROCESSING_FEE_RATE) + PROCESSING_FEE_FIXED;
+    const hostEarnings = price - platformFee;
+    const buyerTotal = price + platformFee + processingFee;
+
+    return {
+      platformFee: platformFee.toFixed(2),
+      processingFee: processingFee.toFixed(2),
+      hostEarnings: Math.max(0, hostEarnings).toFixed(2),
+      buyerTotal: buyerTotal.toFixed(2),
+    };
+  };
+
+  // API mutation
   const createEventMutation = useMutation({
     mutationFn: async (data: CreateEventData) => {
-      console.log("Submitting event data:", data);
-
-      // Format the date properly for the backend
       const eventData = {
-        title: data.title,
-        description: data.description || "",
+        title: data.title.trim(),
+        description: data.description?.trim() || "",
         category: data.category,
-        location: data.location,
-        startDate: new Date(data.startDate).toISOString(), // Convert to proper ISO string
+        location: data.location.trim(),
+        startDate: new Date(data.startDate).toISOString(),
         price: Number(data.price) || 0,
         maxAttendees: data.maxAttendees || null,
-        externalSource: 'user', // Mark as user-created event
-        isPublic: true, // Default to public
+        externalSource: 'user',
+        isPublic: true,
       };
 
       const response = await fetch("/api/events", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify(eventData),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("Server error:", errorText);
+        let errorMessage = "Failed to create event";
 
-        // Parse error message if it's JSON
         try {
           const errorJson = JSON.parse(errorText);
-          throw new Error(errorJson.message || errorJson.error || "Failed to create event");
+          errorMessage = errorJson.message || errorJson.error || errorMessage;
         } catch {
-          throw new Error(errorText || "Failed to create event");
+          errorMessage = errorText || errorMessage;
         }
+
+        throw new Error(errorMessage);
       }
 
       return response.json();
     },
     onSuccess: (data) => {
-      console.log("Event created successfully:", data);
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-
       toast({
         title: "Success!",
         description: "Your event has been created.",
       });
-
-      // Navigate to event page or home
-      if (data.id) {
-        setLocation(`/events/${data.id}`);
-      } else {
-        setLocation("/");
-      }
+      setLocation(data.id ? `/events/${data.id}` : "/");
     },
-    onError: (error: any) => {
-      console.error("Event creation failed:", error);
+    onError: (error: Error) => {
       setIsSubmitting(false);
-
       toast({
         title: "Error",
-        description: error.message || "Failed to create event. Please check all fields and try again.",
+        description: error.message || "Failed to create event. Please try again.",
         variant: "destructive",
       });
     },
   });
 
+  // Form submission
   const onSubmit = async (data: CreateEventData) => {
-    // Prevent double submission
-    if (isSubmitting) return;
+    if (isSubmitting || !user) return;
 
     setIsSubmitting(true);
 
-    // Final validation
-    if (!user) {
-      setIsSubmitting(false);
-      toast({
-        title: "Not Authenticated",
-        description: "Please sign in to create an event",
-        variant: "destructive",
-      });
-      setLocation("/register");
-      return;
-    }
-
-    // Log for debugging
-    console.log("Form validation passed, submitting:", data);
-
     try {
-      // Always require payment for event hosting ($5 platform fee)
-      // Store event data and redirect to payment
+      // Store event data and redirect to payment for platform fee
       sessionStorage.setItem('pendingEventData', JSON.stringify(data));
       sessionStorage.setItem('pendingEventFlow', 'create');
-      
-      // Redirect to payment page for platform fee
       setLocation('/payment-page');
     } catch (error) {
-      console.error("Submission error:", error);
       setIsSubmitting(false);
       toast({
         title: "Error",
@@ -169,36 +175,19 @@ export default function CreateEvent() {
     }
   };
 
-  // Calculate fees for display
-  const calculateFees = (price: number) => {
-    if (price === 0) return null;
-
-    const platformFee = Math.max(price * 0.05, 0.50);
-    const processingFee = (price * 0.029) + 0.30;
-    const hostEarnings = price - platformFee;
-    const buyerTotal = price + platformFee + processingFee;
-
-    return {
-      platformFee: platformFee.toFixed(2),
-      processingFee: processingFee.toFixed(2),
-      hostEarnings: hostEarnings.toFixed(2),
-      buyerTotal: buyerTotal.toFixed(2),
-    };
-  };
-
   const watchPrice = form.watch("price");
   const fees = calculateFees(watchPrice);
 
-  // Show loading while checking auth
+  // Loading state
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
       </div>
     );
   }
 
-  // If not authenticated, show message (backup, should redirect)
+  // Unauthenticated state
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -217,22 +206,23 @@ export default function CreateEvent() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       {/* Header */}
-      <div className="sticky top-0 bg-background/95 backdrop-blur-lg border-b z-10">
+      <header className="sticky top-0 bg-background/95 backdrop-blur-lg border-b z-10">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setLocation("/")}
             className="mr-4"
+            aria-label="Go back"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <h1 className="text-xl font-bold">Create Event</h1>
         </div>
-      </div>
+      </header>
 
-      {/* Form */}
-      <div className="max-w-2xl mx-auto p-4 pb-8">
+      {/* Main Form */}
+      <main className="max-w-2xl mx-auto p-4 pb-8">
         <Card>
           <CardHeader>
             <CardTitle>Event Details</CardTitle>
@@ -240,7 +230,8 @@ export default function CreateEvent() {
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                {/* Title */}
+
+                {/* Event Title */}
                 <FormField
                   control={form.control}
                   name="title"
@@ -250,8 +241,9 @@ export default function CreateEvent() {
                       <FormControl>
                         <Input 
                           placeholder="Summer Beach Party"
-                          {...field}
+                          maxLength={100}
                           disabled={isSubmitting}
+                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
@@ -259,7 +251,7 @@ export default function CreateEvent() {
                   )}
                 />
 
-                {/* Category */}
+                {/* Category Selection */}
                 <FormField
                   control={form.control}
                   name="category"
@@ -277,11 +269,11 @@ export default function CreateEvent() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="parties">🎉 Parties</SelectItem>
-                          <SelectItem value="concerts">🎵 Concerts</SelectItem>
-                          <SelectItem value="sports">⚽ Sports</SelectItem>
-                          <SelectItem value="study">📚 Study Groups</SelectItem>
-                          <SelectItem value="social">🍕 Social</SelectItem>
+                          {EVENT_CATEGORIES.map((category) => (
+                            <SelectItem key={category.value} value={category.value}>
+                              {category.label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -299,9 +291,10 @@ export default function CreateEvent() {
                       <FormControl>
                         <Textarea 
                           placeholder="What can people expect at your event?"
-                          className="min-h-[100px]"
-                          {...field}
+                          className="min-h-[100px] resize-none"
+                          maxLength={1000}
                           disabled={isSubmitting}
+                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
@@ -319,13 +312,13 @@ export default function CreateEvent() {
                         <FormLabel>Date & Time *</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
                             <Input 
                               type="datetime-local"
                               className="pl-10"
-                              {...field}
                               min={new Date().toISOString().slice(0, 16)}
                               disabled={isSubmitting}
+                              {...field}
                             />
                           </div>
                         </FormControl>
@@ -342,12 +335,13 @@ export default function CreateEvent() {
                         <FormLabel>Location *</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
                             <Input 
                               placeholder="123 Main St"
                               className="pl-10"
-                              {...field}
+                              maxLength={200}
                               disabled={isSubmitting}
+                              {...field}
                             />
                           </div>
                         </FormControl>
@@ -357,7 +351,7 @@ export default function CreateEvent() {
                   />
                 </div>
 
-                {/* Pricing */}
+                {/* Pricing & Capacity */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -367,17 +361,16 @@ export default function CreateEvent() {
                         <FormLabel>Ticket Price</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
                             <Input 
                               type="number"
                               min="0"
                               step="0.01"
                               placeholder="0.00 (Free)"
                               className="pl-10"
-                              {...field}
-                              value={field.value || 0}
-                              onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
                               disabled={isSubmitting}
+                              value={field.value || ""}
+                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                             />
                           </div>
                         </FormControl>
@@ -394,16 +387,15 @@ export default function CreateEvent() {
                         <FormLabel>Max Capacity</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <Users className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Users className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
                             <Input 
                               type="number"
                               min="1"
                               placeholder="Unlimited"
                               className="pl-10"
-                              {...field}
-                              value={field.value || ""}
-                              onChange={e => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
                               disabled={isSubmitting}
+                              value={field.value || ""}
+                              onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
                             />
                           </div>
                         </FormControl>
@@ -413,22 +405,24 @@ export default function CreateEvent() {
                   />
                 </div>
 
-                {/* Fee Preview */}
+                {/* Fee Breakdown */}
                 {fees && (
                   <Alert>
                     <Info className="h-4 w-4" />
                     <AlertDescription>
                       <div className="space-y-1 text-sm mt-2">
                         <div className="font-semibold mb-2">Pricing Breakdown:</div>
-                        <div className="flex justify-between">
-                          <span>Platform Fee (5%):</span>
-                          <span>${fees.platformFee}</span>
+                        <div className="space-y-1">
+                          <div className="flex justify-between">
+                            <span>Platform Fee ({(PLATFORM_FEE_RATE * 100).toFixed(0)}%):</span>
+                            <span>${fees.platformFee}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Processing Fee:</span>
+                            <span>${fees.processingFee}</span>
+                          </div>
                         </div>
-                        <div className="flex justify-between">
-                          <span>Processing Fee:</span>
-                          <span>${fees.processingFee}</span>
-                        </div>
-                        <div className="border-t pt-1 mt-2">
+                        <div className="border-t pt-2 mt-2 space-y-1">
                           <div className="flex justify-between font-semibold">
                             <span>You Earn:</span>
                             <span className="text-green-600">${fees.hostEarnings}</span>
@@ -463,7 +457,7 @@ export default function CreateEvent() {
             </Form>
           </CardContent>
         </Card>
-      </div>
+      </main>
     </div>
   );
 }

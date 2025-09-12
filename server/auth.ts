@@ -1,95 +1,333 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import rateLimit from "express-rate-limit";
+import helmet from "helmet";
+import { z } from "zod";
 import { storage } from "./storage";
 import { User as UserType } from "@shared/schema";
 import MemoryStore from "memorystore";
 
+// Enhanced types
 declare global {
   namespace Express {
-    interface User extends Omit<UserType, 'password'> {}
+    interface User extends Omit<UserType, 'password'> {
+      lastLoginAt?: string;
+    }
   }
+}
+
+interface AuthRequest extends Request {
+  user?: Express.User;
 }
 
 const scryptAsync = promisify(scrypt);
 
+// Configuration
+const CONFIG = {
+  // Session settings
+  SESSION_SECRET: process.env.SESSION_SECRET || (() => {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SESSION_SECRET must be set in production');
+    }
+    console.warn('⚠️ Using default session secret - not safe for production');
+    return 'dev-secret-change-in-production';
+  })(),
+
+  // Security settings
+  SESSION_MAX_AGE: 24 * 60 * 60 * 1000, // 24 hours
+  PASSWORD_MIN_LENGTH: 8,
+  MAX_LOGIN_ATTEMPTS: 5,
+  LOCKOUT_DURATION: 15 * 60 * 1000, // 15 minutes
+
+  // Environment settings
+  IS_PRODUCTION: process.env.NODE_ENV === 'production',
+  TRUST_PROXY: process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production',
+};
+
+// Validation schemas
+const registerSchema = z.object({
+  email: z.string()
+    .email('Invalid email address')
+    .max(320, 'Email too long')
+    .toLowerCase()
+    .trim(),
+  password: z.string()
+    .min(CONFIG.PASSWORD_MIN_LENGTH, `Password must be at least ${CONFIG.PASSWORD_MIN_LENGTH} characters`)
+    .max(128, 'Password too long')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+  firstName: z.string()
+    .min(1, 'First name is required')
+    .max(50, 'First name too long')
+    .trim(),
+  lastName: z.string()
+    .min(1, 'Last name is required')
+    .max(50, 'Last name too long')
+    .trim(),
+  university: z.string()
+    .max(100, 'University name too long')
+    .trim()
+    .optional(),
+  graduationYear: z.number()
+    .int()
+    .min(2020)
+    .max(2030)
+    .optional(),
+});
+
+const loginSchema = z.object({
+  email: z.string()
+    .email('Invalid email address')
+    .max(320, 'Email too long')
+    .toLowerCase()
+    .trim(),
+  password: z.string()
+    .min(1, 'Password is required')
+    .max(128, 'Password too long'),
+});
+
+// Enhanced password hashing with configurable cost
 export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16).toString("hex");
+  const salt = randomBytes(32).toString("hex"); // Increased salt size
   const buf = (await scryptAsync(password, salt, 64)) as Buffer;
   return `${buf.toString("hex")}.${salt}`;
 }
 
 export async function comparePasswords(supplied: string, stored: string): Promise<boolean> {
-  const [hashed, salt] = stored.split(".");
-  const hashedBuf = Buffer.from(hashed, "hex");
-  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
-  return timingSafeEqual(hashedBuf, suppliedBuf);
+  try {
+    const [hashed, salt] = stored.split(".");
+    if (!hashed || !salt) {
+      throw new Error('Invalid password format');
+    }
+
+    const hashedBuf = Buffer.from(hashed, "hex");
+    const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
+    return timingSafeEqual(hashedBuf, suppliedBuf);
+  } catch (error) {
+    console.error('Password comparison error:', error);
+    return false;
+  }
 }
 
-export function setupAuth(app: Express) {
+// Rate limiting configurations
+const createRateLimiter = (windowMs: number, max: number, message: string) =>
+  rateLimit({
+    windowMs,
+    max,
+    message: { error: message },
+    standardHeaders: true,
+    legacyHeaders: false,
+    // Store failed attempts by IP + email combination for login attempts
+    keyGenerator: (req: Request) => {
+      if (req.path === '/api/login' && req.body?.email) {
+        return `${req.ip}-${req.body.email}`;
+      }
+      return req.ip;
+    },
+  });
+
+const authLimiter = createRateLimiter(
+  15 * 60 * 1000, // 15 minutes
+  CONFIG.MAX_LOGIN_ATTEMPTS,
+  'Too many authentication attempts, please try again later'
+);
+
+const generalLimiter = createRateLimiter(
+  15 * 60 * 1000, // 15 minutes
+  100, // General API limit
+  'Too many requests, please try again later'
+);
+
+// Validation middleware
+const validateRequest = (schema: z.ZodSchema) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const validated = schema.parse(req.body);
+      req.body = validated; // Replace with validated data
+      next();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message,
+          })),
+        });
+      }
+      next(error);
+    }
+  };
+};
+
+// Security logging
+const logSecurityEvent = (event: string, details: any = {}) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[SECURITY] ${timestamp} - ${event}:`, JSON.stringify(details));
+
+  // In production, you'd want to send this to a proper logging service
+  // like Winston, or a security monitoring service
+};
+
+// Enhanced session store setup
+const createSessionStore = () => {
+  if (CONFIG.IS_PRODUCTION) {
+    // In production, you should use Redis or another persistent store
+    console.warn('⚠️ Using memory store in production - consider Redis for scalability');
+  }
+
   const MemStore = MemoryStore(session);
-  
+  return new MemStore({
+    checkPeriod: 86400000, // Prune expired entries every 24h
+    max: 10000, // Limit memory usage
+  });
+};
+
+export function setupAuth(app: Express) {
+  // Security middleware
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+      },
+    },
+  }));
+
+  // Apply rate limiting
+  app.use('/api/login', authLimiter);
+  app.use('/api/register', authLimiter);
+  app.use('/api/', generalLimiter);
+
+  // Session configuration
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "your-secret-key-for-development",
+    secret: CONFIG.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    store: new MemStore({
-      checkPeriod: 86400000, // Prune expired entries every 24h
-    }),
+    store: createSessionStore(),
+    name: 'session_id', // Don't use default 'connect.sid'
     cookie: {
-      secure: false, // Set to true in production with HTTPS
+      secure: CONFIG.IS_PRODUCTION, // HTTPS only in production
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: CONFIG.SESSION_MAX_AGE,
+      sameSite: 'lax', // CSRF protection
     },
   };
 
-  app.set("trust proxy", 1);
+  if (CONFIG.TRUST_PROXY) {
+    app.set("trust proxy", 1);
+  }
+
   app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Passport Local Strategy
   passport.use(
     new LocalStrategy(
-      { usernameField: "email" },
-      async (email, password, done) => {
+      { 
+        usernameField: "email",
+        passReqToCallback: true,
+      },
+      async (req: Request, email: string, password: string, done) => {
         try {
+          logSecurityEvent('login_attempt', { 
+            email, 
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+          });
+
           const user = await storage.getUserByEmail(email);
-          if (!user || !(await comparePasswords(password, user.password))) {
+
+          if (!user) {
+            logSecurityEvent('login_failed_user_not_found', { email, ip: req.ip });
             return done(null, false, { message: "Invalid email or password" });
           }
-          // Return user without password for security
+
+          const isValidPassword = await comparePasswords(password, user.password);
+          if (!isValidPassword) {
+            logSecurityEvent('login_failed_invalid_password', { 
+              email, 
+              userId: user.id,
+              ip: req.ip,
+            });
+            return done(null, false, { message: "Invalid email or password" });
+          }
+
+          // Update last login time
+          await storage.updateUserLastLogin(user.id);
+
+          logSecurityEvent('login_success', { 
+            email, 
+            userId: user.id,
+            ip: req.ip,
+          });
+
+          // Return user without password
           const { password: _, ...userWithoutPassword } = user;
-          return done(null, userWithoutPassword);
+          return done(null, {
+            ...userWithoutPassword,
+            lastLoginAt: new Date().toISOString(),
+          });
         } catch (error) {
+          logSecurityEvent('login_error', { 
+            email, 
+            error: error instanceof Error ? error.message : 'Unknown error',
+            ip: req.ip,
+          });
           return done(error);
         }
       }
     )
   );
 
-  passport.serializeUser((user, done) => done(null, user.id));
-  
+  // Serialize/deserialize user
+  passport.serializeUser((user: Express.User, done) => {
+    done(null, user.id);
+  });
+
   passport.deserializeUser(async (id: string, done) => {
     try {
       const user = await storage.getUser(id);
-      done(null, user);
+      if (!user) {
+        return done(null, false);
+      }
+
+      // Return user without password
+      const { password: _, ...userWithoutPassword } = user;
+      done(null, userWithoutPassword);
     } catch (error) {
+      logSecurityEvent('deserialize_error', { userId: id, error: error instanceof Error ? error.message : 'Unknown error' });
       done(error);
     }
   });
 
-  // Register endpoint
-  app.post("/api/register", async (req, res, next) => {
+  // Enhanced register endpoint
+  app.post("/api/register", validateRequest(registerSchema), async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const { email, password, firstName, lastName, university, graduationYear } = req.body;
-      
+
+      logSecurityEvent('registration_attempt', { 
+        email, 
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
-        return res.status(400).json({ message: "User already exists with this email" });
+        logSecurityEvent('registration_failed_user_exists', { email, ip: req.ip });
+        return res.status(409).json({ 
+          error: "An account with this email already exists",
+          code: "USER_ALREADY_EXISTS"
+        });
       }
 
       // Hash password and create user
@@ -103,58 +341,238 @@ export function setupAuth(app: Express) {
         graduationYear,
       });
 
-      // Log the user in - exclude password from response
+      logSecurityEvent('registration_success', { 
+        email, 
+        userId: user.id,
+        ip: req.ip,
+      });
+
+      // Automatically log the user in
       const { password: _, ...userWithoutPassword } = user;
       req.login(userWithoutPassword, (err) => {
-        if (err) return next(err);
-        res.status(201).json(userWithoutPassword);
+        if (err) {
+          logSecurityEvent('auto_login_after_registration_failed', { 
+            userId: user.id, 
+            error: err.message 
+          });
+          return next(err);
+        }
+
+        res.status(201).json({
+          user: userWithoutPassword,
+          message: "Account created successfully"
+        });
       });
     } catch (error) {
+      logSecurityEvent('registration_error', { 
+        email: req.body.email,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        ip: req.ip,
+      });
+
       console.error("Registration error:", error);
-      res.status(500).json({ message: "Internal server error" });
+      res.status(500).json({ 
+        error: "Failed to create account. Please try again.",
+        code: "REGISTRATION_FAILED"
+      });
     }
   });
 
-  // Login endpoint
-  app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err: any, user: Omit<UserType, 'password'> | false, info: any) => {
+  // Enhanced login endpoint
+  app.post("/api/login", validateRequest(loginSchema), (req: AuthRequest, res: Response, next: NextFunction) => {
+    passport.authenticate("local", (err: any, user: Express.User | false, info: any) => {
       if (err) {
-        return res.status(500).json({ message: "Internal server error" });
+        console.error("Login authentication error:", err);
+        return res.status(500).json({ 
+          error: "Authentication service error",
+          code: "AUTH_SERVICE_ERROR"
+        });
       }
+
       if (!user) {
-        return res.status(401).json({ message: info?.message || "Invalid credentials" });
+        return res.status(401).json({ 
+          error: info?.message || "Invalid credentials",
+          code: "INVALID_CREDENTIALS"
+        });
       }
+
       req.login(user, (err) => {
         if (err) {
-          return res.status(500).json({ message: "Login failed" });
+          logSecurityEvent('login_session_error', { 
+            userId: user.id, 
+            error: err.message 
+          });
+          return res.status(500).json({ 
+            error: "Failed to establish session",
+            code: "SESSION_ERROR"
+          });
         }
-        res.json(user);
+
+        res.json({
+          user,
+          message: "Logged in successfully"
+        });
       });
     })(req, res, next);
   });
 
-  // Logout endpoint
-  app.post("/api/logout", (req, res, next) => {
+  // Enhanced logout endpoint
+  app.post("/api/logout", (req: AuthRequest, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+
     req.logout((err) => {
-      if (err) return next(err);
-      res.json({ message: "Logged out successfully" });
+      if (err) {
+        logSecurityEvent('logout_error', { 
+          userId, 
+          error: err.message,
+          ip: req.ip,
+        });
+        return next(err);
+      }
+
+      // Destroy session
+      req.session.destroy((err) => {
+        if (err) {
+          logSecurityEvent('session_destroy_error', { 
+            userId, 
+            error: err.message 
+          });
+        } else {
+          logSecurityEvent('logout_success', { 
+            userId,
+            ip: req.ip,
+          });
+        }
+
+        res.clearCookie('session_id');
+        res.json({ 
+          message: "Logged out successfully",
+          success: true
+        });
+      });
     });
   });
 
-  // Get current user endpoint
-  app.get("/api/user", (req, res) => {
+  // Get current user endpoint with additional security
+  app.get("/api/user", (req: AuthRequest, res: Response) => {
     if (!req.isAuthenticated() || !req.user) {
-      return res.status(401).json({ message: "Not authenticated" });
+      return res.status(401).json({ 
+        error: "Not authenticated",
+        code: "NOT_AUTHENTICATED"
+      });
     }
-    
-    res.json(req.user);
+
+    // Update last seen timestamp
+    const userWithActivity = {
+      ...req.user,
+      lastSeenAt: new Date().toISOString(),
+    };
+
+    res.json(userWithActivity);
+  });
+
+  // Password change endpoint
+  app.post("/api/change-password", requireAuth, validateRequest(z.object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: z.string()
+      .min(CONFIG.PASSWORD_MIN_LENGTH, `Password must be at least ${CONFIG.PASSWORD_MIN_LENGTH} characters`)
+      .max(128, 'Password too long')
+      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+      .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+      .regex(/[0-9]/, 'Password must contain at least one number'),
+  })), async (req: AuthRequest, res: Response) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const userId = req.user!.id;
+
+      // Get user with password
+      const user = await storage.getUserWithPassword(userId);
+      if (!user) {
+        return res.status(404).json({ 
+          error: "User not found",
+          code: "USER_NOT_FOUND"
+        });
+      }
+
+      // Verify current password
+      const isCurrentPasswordValid = await comparePasswords(currentPassword, user.password);
+      if (!isCurrentPasswordValid) {
+        logSecurityEvent('password_change_failed_invalid_current', { 
+          userId,
+          ip: req.ip,
+        });
+        return res.status(400).json({ 
+          error: "Current password is incorrect",
+          code: "INVALID_CURRENT_PASSWORD"
+        });
+      }
+
+      // Hash new password and update
+      const hashedNewPassword = await hashPassword(newPassword);
+      await storage.updateUserPassword(userId, hashedNewPassword);
+
+      logSecurityEvent('password_change_success', { 
+        userId,
+        ip: req.ip,
+      });
+
+      res.json({ 
+        message: "Password changed successfully",
+        success: true
+      });
+    } catch (error) {
+      logSecurityEvent('password_change_error', { 
+        userId: req.user?.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        ip: req.ip,
+      });
+
+      console.error("Password change error:", error);
+      res.status(500).json({ 
+        error: "Failed to change password",
+        code: "PASSWORD_CHANGE_FAILED"
+      });
+    }
   });
 }
 
-// Middleware to check authentication
-export function requireAuth(req: any, res: any, next: any) {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ message: "Authentication required" });
+// Enhanced auth middleware
+export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ 
+      error: "Authentication required",
+      code: "AUTHENTICATION_REQUIRED"
+    });
   }
+  next();
+}
+
+// Optional auth middleware (doesn't block, but adds user if authenticated)
+export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
+  // Just continue - user will be available if authenticated
+  next();
+}
+
+// Admin role middleware (extend as needed)
+export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.isAuthenticated() || !req.user) {
+    return res.status(401).json({ 
+      error: "Authentication required",
+      code: "AUTHENTICATION_REQUIRED"
+    });
+  }
+
+  // Add admin check logic here based on your user schema
+  if (!(req.user as any).isAdmin) {
+    logSecurityEvent('admin_access_denied', { 
+      userId: req.user.id,
+      ip: req.ip,
+    });
+    return res.status(403).json({ 
+      error: "Admin access required",
+      code: "ADMIN_ACCESS_REQUIRED"
+    });
+  }
+
   next();
 }

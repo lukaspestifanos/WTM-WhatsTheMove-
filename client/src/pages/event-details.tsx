@@ -12,8 +12,77 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { VideoUploader } from "@/components/VideoUploader";
+import { 
+  Calendar, 
+  Clock, 
+  MapPin, 
+  Users, 
+  DollarSign, 
+  ArrowLeft, 
+  Share2, 
+  ExternalLink,
+  MessageCircle,
+  Video
+} from "lucide-react";
+
+// Types
+interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  category: string;
+  startDate: string;
+  location: string;
+  venueName?: string;
+  maxAttendees?: number;
+  price?: number;
+  imageUrl?: string;
+  externalSource?: string;
+  url?: string;
+}
+
+interface RSVP {
+  id: string;
+  userId?: string;
+  status: string;
+}
+
+interface Comment {
+  id: string;
+  content: string;
+  guestName?: string;
+  userId?: string;
+  createdAt: string;
+}
+
+interface GuestRsvpData {
+  guestName: string;
+  guestEmail: string;
+  guestAddress: string;
+}
+
+interface GuestCommentData {
+  guestName: string;
+  guestEmail: string;
+  content: string;
+}
+
+// Constants
+const CATEGORY_COLORS = {
+  parties: "bg-gradient-to-r from-pink-500 to-rose-600 text-white",
+  study: "bg-gradient-to-r from-emerald-500 to-green-600 text-white",
+  sports: "bg-gradient-to-r from-amber-500 to-orange-600 text-white",
+  concerts: "bg-gradient-to-r from-purple-500 to-violet-600 text-white",
+  social: "bg-gradient-to-r from-blue-500 to-indigo-600 text-white",
+} as const;
+
+const RSVP_STATUS = {
+  ATTENDING: "attending",
+  NOT_ATTENDING: "not_attending",
+  MAYBE: "maybe",
+} as const;
 
 export default function EventDetails() {
   const { id } = useParams();
@@ -21,79 +90,122 @@ export default function EventDetails() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // State management
   const [showGuestRsvp, setShowGuestRsvp] = useState(false);
   const [showGuestComment, setShowGuestComment] = useState(false);
-  const [guestRsvpData, setGuestRsvpData] = useState({
+  const [guestRsvpData, setGuestRsvpData] = useState<GuestRsvpData>({
     guestName: "",
     guestEmail: "",
     guestAddress: "",
   });
-  const [guestCommentData, setGuestCommentData] = useState({
+  const [guestCommentData, setGuestCommentData] = useState<GuestCommentData>({
     guestName: "",
     guestEmail: "",
     content: "",
   });
 
-  // Try to get event from search cache first, then fetch if not available
+  // Query for event data with intelligent caching
   const { data: event, isLoading, error } = useQuery({
     queryKey: ["/api/events", id],
     enabled: !!id,
-    queryFn: async () => {
-      // First check if we have this event in our search results cache
-      const searchCache = queryClient.getQueryData(["/api/events/search"]);
-      const cachedEvent = searchCache?.events?.find((e: any) => e.id === id);
-      
+    queryFn: async (): Promise<Event> => {
+      // Check cache first for better performance
+      const searchCache = queryClient.getQueryData(["/api/events/search"]) as any;
+      const cachedEvent = searchCache?.events?.find((e: Event) => e.id === id);
+
       if (cachedEvent) {
-        console.log('Using cached event data for', id);
         return cachedEvent;
       }
-      
-      // If not in cache, fetch from API
-      console.log('Fetching event data from API for', id);
+
+      // Fetch from API if not cached
       const response = await fetch(`/api/events/${id}`);
       if (!response.ok) {
-        throw new Error('Event not found');
+        throw new Error(response.status === 404 ? 'Event not found' : 'Failed to load event');
       }
       return response.json();
-    }
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    cacheTime: 30 * 60 * 1000, // 30 minutes
   });
 
-  const { data: rsvps } = useQuery({
+  // Query for RSVPs
+  const { data: rsvps = [] } = useQuery<RSVP[]>({
     queryKey: ["/api/events", id, "rsvps"],
     enabled: !!id,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
-  const { data: comments } = useQuery({
+  // Query for comments
+  const { data: comments = [] } = useQuery<Comment[]>({
     queryKey: ["/api/events", id, "comments"],
     enabled: !!id,
+    staleTime: 1 * 60 * 1000, // 1 minute
   });
 
+  // Computed values
+  const attendeeCount = useMemo(() => 
+    rsvps.filter(rsvp => rsvp.status === RSVP_STATUS.ATTENDING).length,
+    [rsvps]
+  );
+
+  const userRsvp = useMemo(() => 
+    rsvps.find(rsvp => rsvp.userId === user?.id),
+    [rsvps, user?.id]
+  );
+
+  const spotsLeft = useMemo(() => 
+    event?.maxAttendees ? event.maxAttendees - attendeeCount : null,
+    [event?.maxAttendees, attendeeCount]
+  );
+
+  // Utility functions
+  const getCategoryColor = useCallback((category: string) => {
+    return CATEGORY_COLORS[category as keyof typeof CATEGORY_COLORS] || CATEGORY_COLORS.social;
+  }, []);
+
+  const formatDateTime = useCallback((dateString: string) => {
+    const date = new Date(dateString);
+    return {
+      date: date.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+      time: date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }),
+    };
+  }, []);
+
+  // Mutations
   const rsvpMutation = useMutation({
     mutationFn: async (status: string) => {
-      return await apiRequest("POST", `/api/events/${id}/rsvp`, { status });
+      return apiRequest("POST", `/api/events/${id}/rsvp`, { status });
     },
     onSuccess: () => {
       toast({
         title: "RSVP Updated",
-        description: "Your RSVP has been updated!",
+        description: "Your RSVP has been updated successfully!",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/events", id, "rsvps"] });
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
         toast({
-          title: "Please log in",
-          description: "You need to be logged in to RSVP",
+          title: "Authentication Required",
+          description: "Please log in to RSVP to this event",
           variant: "destructive",
         });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
+        setTimeout(() => setLocation("/auth"), 1000);
         return;
       }
-      
+
       toast({
-        title: "Error",
+        title: "RSVP Failed",
         description: "Failed to update RSVP. Please try again.",
         variant: "destructive",
       });
@@ -101,13 +213,13 @@ export default function EventDetails() {
   });
 
   const guestRsvpMutation = useMutation({
-    mutationFn: async (data: typeof guestRsvpData) => {
-      return await apiRequest("POST", `/api/events/${id}/rsvp/guest`, data);
+    mutationFn: async (data: GuestRsvpData & { status: string }) => {
+      return apiRequest("POST", `/api/events/${id}/rsvp/guest`, data);
     },
     onSuccess: () => {
       toast({
         title: "RSVP Submitted",
-        description: "Thank you for your RSVP!",
+        description: "Thank you for your RSVP! We'll see you there.",
       });
       setShowGuestRsvp(false);
       setGuestRsvpData({ guestName: "", guestEmail: "", guestAddress: "" });
@@ -115,25 +227,24 @@ export default function EventDetails() {
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to submit RSVP. Please try again.",
+        title: "RSVP Failed",
+        description: "Failed to submit RSVP. Please check your information and try again.",
         variant: "destructive",
       });
     },
   });
 
   const commentMutation = useMutation({
-    mutationFn: async (data: any) => {
-      if (isAuthenticated) {
-        return await apiRequest("POST", `/api/events/${id}/comments`, { content: data.content });
-      } else {
-        return await apiRequest("POST", `/api/events/${id}/comments/guest`, data);
-      }
+    mutationFn: async (data: GuestCommentData | { content: string }) => {
+      const endpoint = isAuthenticated 
+        ? `/api/events/${id}/comments`
+        : `/api/events/${id}/comments/guest`;
+      return apiRequest("POST", endpoint, data);
     },
     onSuccess: () => {
       toast({
-        title: "Comment Added",
-        description: "Your comment has been posted!",
+        title: "Comment Posted",
+        description: "Your comment has been added to the event!",
       });
       setShowGuestComment(false);
       setGuestCommentData({ guestName: "", guestEmail: "", content: "" });
@@ -141,99 +252,136 @@ export default function EventDetails() {
     },
     onError: () => {
       toast({
-        title: "Error",
+        title: "Comment Failed",
         description: "Failed to post comment. Please try again.",
         variant: "destructive",
       });
     },
   });
 
-  const getCategoryColor = (category: string) => {
-    const colors = {
-      parties: "bg-gradient-to-r from-pink-500 to-rose-600 text-white",
-      study: "bg-gradient-to-r from-emerald-500 to-green-600 text-white",
-      sports: "bg-gradient-to-r from-amber-500 to-orange-600 text-white",
-      concerts: "bg-gradient-to-r from-purple-500 to-violet-600 text-white",
-      social: "bg-gradient-to-r from-blue-500 to-indigo-600 text-white",
-    };
-    return colors[category as keyof typeof colors] || colors.social;
-  };
-
-  const handleRsvp = () => {
+  // Event handlers
+  const handleRsvp = useCallback(() => {
     if (!isAuthenticated) {
       setShowGuestRsvp(true);
       return;
     }
-    rsvpMutation.mutate("attending");
-  };
+    rsvpMutation.mutate(RSVP_STATUS.ATTENDING);
+  }, [isAuthenticated, rsvpMutation]);
 
-  const handleGuestRsvpSubmit = (e: React.FormEvent) => {
+  const handleGuestRsvpSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!guestRsvpData.guestName || !guestRsvpData.guestEmail) {
+
+    if (!guestRsvpData.guestName.trim() || !guestRsvpData.guestEmail.trim()) {
       toast({
         title: "Missing Information",
-        description: "Please fill in your name and email",
+        description: "Please provide both your name and email address",
         variant: "destructive",
       });
       return;
     }
-    guestRsvpMutation.mutate({ ...guestRsvpData, status: "attending" } as any);
-  };
 
-  const handleGuestCommentSubmit = (e: React.FormEvent) => {
+    guestRsvpMutation.mutate({ 
+      ...guestRsvpData, 
+      guestName: guestRsvpData.guestName.trim(),
+      guestEmail: guestRsvpData.guestEmail.trim(),
+      status: RSVP_STATUS.ATTENDING 
+    });
+  }, [guestRsvpData, guestRsvpMutation, toast]);
+
+  const handleGuestCommentSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!guestCommentData.guestName || !guestCommentData.guestEmail || !guestCommentData.content) {
+
+    if (!guestCommentData.guestName.trim() || 
+        !guestCommentData.guestEmail.trim() || 
+        !guestCommentData.content.trim()) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all fields",
+        description: "Please fill in all required fields",
         variant: "destructive",
       });
       return;
     }
-    commentMutation.mutate(guestCommentData);
-  };
 
-  const handleShare = async () => {
-    if (navigator.share && event) {
+    commentMutation.mutate({
+      ...guestCommentData,
+      guestName: guestCommentData.guestName.trim(),
+      guestEmail: guestCommentData.guestEmail.trim(),
+      content: guestCommentData.content.trim(),
+    });
+  }, [guestCommentData, commentMutation, toast]);
+
+  const handleShare = useCallback(async () => {
+    if (!event) return;
+
+    if (navigator.share) {
       try {
         await navigator.share({
-          title: (event as any).title,
-          text: (event as any).description,
+          title: event.title,
+          text: event.description || `Check out this event: ${event.title}`,
           url: window.location.href,
         });
+        return;
       } catch (error) {
-        console.error("Error sharing:", error);
+        // User cancelled sharing or sharing failed
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error("Native sharing failed:", error);
+        }
       }
-    } else {
-      // Fallback to copy to clipboard
-      navigator.clipboard.writeText(window.location.href);
+    }
+
+    // Fallback to clipboard
+    try {
+      await navigator.clipboard.writeText(window.location.href);
       toast({
         title: "Link Copied",
-        description: "Event link copied to clipboard!",
+        description: "Event link copied to your clipboard!",
+      });
+    } catch (error) {
+      toast({
+        title: "Share Failed",
+        description: "Unable to share event link. Please copy it manually from the address bar.",
+        variant: "destructive",
       });
     }
-  };
+  }, [event, toast]);
 
+  const handleAddComment = useCallback(() => {
+    if (isAuthenticated) {
+      // For authenticated users, you could show an inline comment form
+      // For now, just show the guest form
+      setShowGuestComment(true);
+    } else {
+      setShowGuestComment(true);
+    }
+  }, [isAuthenticated]);
+
+  // Loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading event...</p>
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-muted-foreground">Loading event details...</p>
         </div>
       </div>
     );
   }
 
-  if (!event) {
+  // Error state
+  if (error || !event) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center">
-            <i className="fas fa-calendar-times text-4xl text-muted-foreground mb-4"></i>
-            <p className="text-lg font-medium text-foreground mb-2">Event not found</p>
-            <p className="text-muted-foreground mb-4">This event may have been deleted or moved.</p>
-            <Button onClick={() => setLocation("/")} data-testid="button-back-home">
+          <CardContent className="pt-6 text-center space-y-4">
+            <Calendar className="w-12 h-12 text-muted-foreground mx-auto" />
+            <div>
+              <h2 className="text-lg font-semibold mb-2">Event Not Found</h2>
+              <p className="text-muted-foreground mb-4">
+                This event may have been removed or the link may be incorrect.
+              </p>
+            </div>
+            <Button onClick={() => setLocation("/")} className="w-full">
+              <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Events
             </Button>
           </CardContent>
@@ -242,131 +390,122 @@ export default function EventDetails() {
     );
   }
 
-  const attendeeCount = (rsvps as any)?.filter((rsvp: any) => rsvp.status === "attending").length || 0;
-  const userRsvp = (rsvps as any)?.find((rsvp: any) => rsvp.userId === (user as any)?.id);
+  const { date, time } = formatDateTime(event.startDate);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Hero Section */}
       <div className="relative">
-        {(event as any).imageUrl ? (
+        {event.imageUrl ? (
           <img 
-            src={(event as any).imageUrl}
-            alt={(event as any).title}
+            src={event.imageUrl}
+            alt={event.title}
             className="w-full h-64 object-cover"
-            data-testid="img-event-hero"
+            onError={(e) => {
+              // Fallback if image fails to load
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+            }}
           />
-        ) : (
-          <div className="w-full h-64 bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
-            <i className="fas fa-calendar-alt text-white text-6xl opacity-50"></i>
-          </div>
-        )}
-        
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => setLocation("/")}
-          className="absolute top-4 left-4 rounded-full w-10 h-10 p-0 bg-white/90 backdrop-blur-sm"
-          data-testid="button-back"
-        >
-          <i className="fas fa-arrow-left"></i>
-        </Button>
+        ) : null}
 
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={handleShare}
-          className="absolute top-4 right-4 rounded-full w-10 h-10 p-0 bg-white/90 backdrop-blur-sm"
-          data-testid="button-share"
-        >
-          <i className="fas fa-share-alt"></i>
-        </Button>
+        {/* Fallback background */}
+        <div className={`w-full h-64 bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center ${event.imageUrl ? 'hidden' : ''}`}>
+          <Calendar className="text-white text-6xl opacity-50" />
+        </div>
+
+        {/* Navigation buttons */}
+        <div className="absolute top-4 left-4 right-4 flex justify-between">
+          <Button
+            variant="secondary"
+            size="icon"
+            onClick={() => setLocation("/")}
+            className="rounded-full bg-white/90 backdrop-blur-sm hover:bg-white/95"
+            aria-label="Go back to events"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="icon"
+            onClick={handleShare}
+            className="rounded-full bg-white/90 backdrop-blur-sm hover:bg-white/95"
+            aria-label="Share event"
+          >
+            <Share2 className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
-      {/* Event Info */}
-      <div className="p-6 space-y-6">
-        <div>
-          <div className="flex items-start justify-between mb-4">
-            <h1 className="text-3xl font-bold text-foreground flex-1 mr-4" data-testid="text-event-title">
-              {(event as any).title}
+      {/* Event Content */}
+      <div className="p-6 space-y-6 max-w-4xl mx-auto">
+        {/* Event Header */}
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-3xl font-bold text-foreground flex-1">
+              {event.title}
             </h1>
-            <Badge className={`${getCategoryColor((event as any).category)} px-3 py-1 rounded-full font-medium`}>
-              {(event as any).category.toUpperCase()}
+            <Badge className={`${getCategoryColor(event.category)} px-3 py-1 rounded-full font-medium whitespace-nowrap`}>
+              {event.category.toUpperCase()}
             </Badge>
           </div>
 
-          {(event as any).description && (
-            <p className="text-muted-foreground text-lg leading-relaxed" data-testid="text-event-description">
-              {(event as any).description}
+          {event.description && (
+            <p className="text-muted-foreground text-lg leading-relaxed">
+              {event.description}
             </p>
           )}
         </div>
 
-        {/* Event Details */}
-        <div className="space-y-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <i className="fas fa-clock text-blue-600"></i>
+        {/* Event Details Grid */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex items-center space-x-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20">
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center">
+              <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <p className="font-medium text-foreground" data-testid="text-event-date">
-                {new Date((event as any).startDate).toLocaleDateString("en-US", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </p>
-              <p className="text-muted-foreground" data-testid="text-event-time">
-                {new Date((event as any).startDate).toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
-              </p>
+              <p className="font-medium text-foreground">{date}</p>
+              <p className="text-sm text-muted-foreground">{time}</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-              <i className="fas fa-map-marker-alt text-green-600"></i>
+          <div className="flex items-center space-x-3 p-3 rounded-lg bg-green-50 dark:bg-green-950/20">
+            <div className="w-10 h-10 bg-green-100 dark:bg-green-800 rounded-full flex items-center justify-center">
+              <MapPin className="w-5 h-5 text-green-600 dark:text-green-400" />
             </div>
             <div>
-              <p className="font-medium text-foreground" data-testid="text-event-venue">
-                {(event as any).venueName || (event as any).location}
+              <p className="font-medium text-foreground">
+                {event.venueName || event.location}
               </p>
-              <p className="text-muted-foreground" data-testid="text-event-location">
-                {(event as any).location}
-              </p>
+              <p className="text-sm text-muted-foreground">{event.location}</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-              <i className="fas fa-users text-purple-600"></i>
+          <div className="flex items-center space-x-3 p-3 rounded-lg bg-purple-50 dark:bg-purple-950/20">
+            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-800 rounded-full flex items-center justify-center">
+              <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <p className="font-medium text-foreground" data-testid="text-attendee-count">
+              <p className="font-medium text-foreground">
                 {attendeeCount} attending
               </p>
-              {(event as any).maxAttendees && (
-                <p className="text-muted-foreground">
-                  {(event as any).maxAttendees - attendeeCount} spots left
+              {spotsLeft !== null && (
+                <p className="text-sm text-muted-foreground">
+                  {spotsLeft > 0 ? `${spotsLeft} spots left` : 'Event is full'}
                 </p>
               )}
             </div>
           </div>
 
-          {(event as any).price !== undefined && (event as any).price > 0 && (
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-                <i className="fas fa-dollar-sign text-yellow-600"></i>
+          {event.price !== undefined && event.price > 0 && (
+            <div className="flex items-center space-x-3 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/20">
+              <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-800 rounded-full flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
               </div>
               <div>
-                <p className="font-medium text-foreground" data-testid="text-event-price">
-                  ${(event as any).price}
-                </p>
-                <p className="text-muted-foreground">Per person</p>
+                <p className="font-medium text-foreground">${event.price}</p>
+                <p className="text-sm text-muted-foreground">Per person</p>
               </div>
             </div>
           )}
@@ -374,44 +513,44 @@ export default function EventDetails() {
 
         {/* RSVP Section */}
         <div className="space-y-4">
-          {(event as any).externalSource && (event as any).url ? (
+          {event.externalSource && event.url ? (
             <Button 
-              className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-semibold text-lg shadow-lg"
-              onClick={() => window.open((event as any).url, "_blank")}
-              data-testid="button-external-tickets"
+              className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-shadow"
+              onClick={() => window.open(event.url, "_blank", "noopener,noreferrer")}
             >
-              {(event as any).price && (event as any).price > 0 ? `Get Tickets $${(event as any).price}` : "Get Tickets"}
-              <i className="fas fa-external-link-alt ml-2"></i>
+              {event.price && event.price > 0 ? `Get Tickets - $${event.price}` : "Get Tickets"}
+              <ExternalLink className="w-5 h-5 ml-2" />
             </Button>
           ) : (
-            <div className="flex space-x-3">
+            <div className="flex gap-3">
               <Button 
                 onClick={handleRsvp}
-                disabled={rsvpMutation.isPending || guestRsvpMutation.isPending}
-                className="flex-1 bg-primary text-primary-foreground py-4 rounded-xl font-semibold text-lg shadow-lg"
-                data-testid="button-rsvp"
+                disabled={rsvpMutation.isPending || guestRsvpMutation.isPending || (spotsLeft !== null && spotsLeft <= 0)}
+                className="flex-1 bg-primary text-primary-foreground py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-shadow"
               >
                 {(rsvpMutation.isPending || guestRsvpMutation.isPending) ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                     RSVPing...
                   </>
                 ) : userRsvp ? (
                   "✓ You're Going"
-                ) : (event as any).price && (event as any).price > 0 ? (
-                  `RSVP $${(event as any).price}`
+                ) : spotsLeft !== null && spotsLeft <= 0 ? (
+                  "Event Full"
+                ) : event.price && event.price > 0 ? (
+                  `RSVP - $${event.price}`
                 ) : (
                   "RSVP Free"
                 )}
               </Button>
-              
+
               <Button
                 variant="secondary"
                 onClick={handleShare}
                 className="w-12 h-12 rounded-xl flex items-center justify-center"
-                data-testid="button-share-event"
+                aria-label="Share event"
               >
-                <i className="fas fa-share-alt"></i>
+                <Share2 className="w-4 h-4" />
               </Button>
             </div>
           )}
@@ -426,46 +565,45 @@ export default function EventDetails() {
             <CardContent>
               <form onSubmit={handleGuestRsvpSubmit} className="space-y-4">
                 <div>
-                  <Label htmlFor="guest-name">Name *</Label>
+                  <Label htmlFor="guest-name">Full Name *</Label>
                   <Input
                     id="guest-name"
                     type="text"
                     value={guestRsvpData.guestName}
-                    onChange={(e) => setGuestRsvpData({ ...guestRsvpData, guestName: e.target.value })}
-                    placeholder="Your full name"
+                    onChange={(e) => setGuestRsvpData(prev => ({ ...prev, guestName: e.target.value }))}
+                    placeholder="Enter your full name"
                     required
-                    data-testid="input-guest-name"
+                    maxLength={100}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="guest-email">Email *</Label>
+                  <Label htmlFor="guest-email">Email Address *</Label>
                   <Input
                     id="guest-email"
                     type="email"
                     value={guestRsvpData.guestEmail}
-                    onChange={(e) => setGuestRsvpData({ ...guestRsvpData, guestEmail: e.target.value })}
+                    onChange={(e) => setGuestRsvpData(prev => ({ ...prev, guestEmail: e.target.value }))}
                     placeholder="your.email@example.com"
                     required
-                    data-testid="input-guest-email"
+                    maxLength={320}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="guest-address">Address</Label>
+                  <Label htmlFor="guest-address">Address (Optional)</Label>
                   <Input
                     id="guest-address"
                     type="text"
                     value={guestRsvpData.guestAddress}
-                    onChange={(e) => setGuestRsvpData({ ...guestRsvpData, guestAddress: e.target.value })}
-                    placeholder="Your address (optional)"
-                    data-testid="input-guest-address"
+                    onChange={(e) => setGuestRsvpData(prev => ({ ...prev, guestAddress: e.target.value }))}
+                    placeholder="Your address"
+                    maxLength={500}
                   />
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex gap-2">
                   <Button
                     type="submit"
                     disabled={guestRsvpMutation.isPending}
                     className="flex-1"
-                    data-testid="button-submit-guest-rsvp"
                   >
                     {guestRsvpMutation.isPending ? "Submitting..." : "Submit RSVP"}
                   </Button>
@@ -473,7 +611,6 @@ export default function EventDetails() {
                     type="button"
                     variant="outline"
                     onClick={() => setShowGuestRsvp(false)}
-                    data-testid="button-cancel-guest-rsvp"
                   >
                     Cancel
                   </Button>
@@ -487,17 +624,15 @@ export default function EventDetails() {
 
         {/* Video Section */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold" data-testid="text-videos-title">
-              Event Videos
-            </h2>
+          <div className="flex items-center gap-2">
+            <Video className="w-5 h-5" />
+            <h2 className="text-xl font-semibold">Event Videos</h2>
           </div>
-          
+
           <VideoUploader
-            eventId={id}
+            eventId={id!}
             isGuest={!isAuthenticated}
             onUploadComplete={() => {
-              // Refresh event media when upload completes
               queryClient.invalidateQueries({ queryKey: ["/api/events", id, "media"] });
             }}
           />
@@ -508,21 +643,18 @@ export default function EventDetails() {
         {/* Comments Section */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold" data-testid="text-comments-title">
-              Comments ({(comments as any)?.length || 0})
-            </h2>
+            <div className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5" />
+              <h2 className="text-xl font-semibold">
+                Comments ({comments.length})
+              </h2>
+            </div>
             <Button
               variant="outline"
-              onClick={() => {
-                if (isAuthenticated) {
-                  // Handle authenticated comment (you can add a simple form here)
-                } else {
-                  setShowGuestComment(true);
-                }
-              }}
-              data-testid="button-add-comment"
+              onClick={handleAddComment}
+              size="sm"
             >
-              <i className="fas fa-comment mr-2"></i>
+              <MessageCircle className="w-4 h-4 mr-2" />
               Add Comment
             </Button>
           </div>
@@ -531,51 +663,55 @@ export default function EventDetails() {
           {showGuestComment && (
             <Card>
               <CardHeader>
-                <CardTitle>Add Comment as Guest</CardTitle>
+                <CardTitle>Add Comment</CardTitle>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleGuestCommentSubmit} className="space-y-4">
-                  <div>
-                    <Label htmlFor="comment-name">Name *</Label>
-                    <Input
-                      id="comment-name"
-                      type="text"
-                      value={guestCommentData.guestName}
-                      onChange={(e) => setGuestCommentData({ ...guestCommentData, guestName: e.target.value })}
-                      placeholder="Your name"
-                      required
-                      data-testid="input-comment-name"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="comment-email">Email *</Label>
-                    <Input
-                      id="comment-email"
-                      type="email"
-                      value={guestCommentData.guestEmail}
-                      onChange={(e) => setGuestCommentData({ ...guestCommentData, guestEmail: e.target.value })}
-                      placeholder="your.email@example.com"
-                      required
-                      data-testid="input-comment-email"
-                    />
-                  </div>
+                  {!isAuthenticated && (
+                    <>
+                      <div>
+                        <Label htmlFor="comment-name">Name *</Label>
+                        <Input
+                          id="comment-name"
+                          type="text"
+                          value={guestCommentData.guestName}
+                          onChange={(e) => setGuestCommentData(prev => ({ ...prev, guestName: e.target.value }))}
+                          placeholder="Your name"
+                          required
+                          maxLength={100}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="comment-email">Email *</Label>
+                        <Input
+                          id="comment-email"
+                          type="email"
+                          value={guestCommentData.guestEmail}
+                          onChange={(e) => setGuestCommentData(prev => ({ ...prev, guestEmail: e.target.value }))}
+                          placeholder="your.email@example.com"
+                          required
+                          maxLength={320}
+                        />
+                      </div>
+                    </>
+                  )}
                   <div>
                     <Label htmlFor="comment-content">Comment *</Label>
                     <Textarea
                       id="comment-content"
                       value={guestCommentData.content}
-                      onChange={(e) => setGuestCommentData({ ...guestCommentData, content: e.target.value })}
+                      onChange={(e) => setGuestCommentData(prev => ({ ...prev, content: e.target.value }))}
                       placeholder="Share your thoughts about this event..."
                       required
-                      data-testid="textarea-comment-content"
+                      maxLength={1000}
+                      className="min-h-[100px] resize-none"
                     />
                   </div>
-                  <div className="flex space-x-2">
+                  <div className="flex gap-2">
                     <Button
                       type="submit"
                       disabled={commentMutation.isPending}
                       className="flex-1"
-                      data-testid="button-submit-comment"
                     >
                       {commentMutation.isPending ? "Posting..." : "Post Comment"}
                     </Button>
@@ -583,7 +719,6 @@ export default function EventDetails() {
                       type="button"
                       variant="outline"
                       onClick={() => setShowGuestComment(false)}
-                      data-testid="button-cancel-comment"
                     >
                       Cancel
                     </Button>
@@ -595,23 +730,23 @@ export default function EventDetails() {
 
           {/* Comments List */}
           <div className="space-y-3">
-            {(comments as any)?.length > 0 ? (
-              (comments as any).map((comment: any) => (
+            {comments.length > 0 ? (
+              comments.map((comment) => (
                 <Card key={comment.id} className="p-4">
                   <div className="flex items-start space-x-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium text-sm shrink-0">
                       {(comment.guestName || comment.userId || 'A')[0].toUpperCase()}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2 mb-1">
-                        <p className="font-medium text-sm" data-testid={`text-comment-author-${comment.id}`}>
+                        <p className="font-medium text-sm truncate">
                           {comment.guestName || comment.userId || 'Anonymous'}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground shrink-0">
                           {new Date(comment.createdAt).toLocaleDateString()}
                         </p>
                       </div>
-                      <p className="text-sm text-foreground" data-testid={`text-comment-content-${comment.id}`}>
+                      <p className="text-sm text-foreground break-words">
                         {comment.content}
                       </p>
                     </div>
@@ -620,8 +755,10 @@ export default function EventDetails() {
               ))
             ) : (
               <Card className="p-6 text-center">
-                <i className="fas fa-comments text-2xl text-muted-foreground mb-2"></i>
-                <p className="text-muted-foreground">No comments yet. Be the first to share your thoughts!</p>
+                <MessageCircle className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-muted-foreground">
+                  No comments yet. Be the first to share your thoughts!
+                </p>
               </Card>
             )}
           </div>
