@@ -52,12 +52,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ error: 'User ID not found' });
       }
-      
+
       const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
       }
-      
+
       // Remove sensitive data
       const { password, ...userProfile } = user;
       res.json(userProfile);
@@ -98,9 +98,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/events/search", searchLimiter, async (req, res) => {
     try {
       const { lat, lng, radius = 50, category, keyword, startDate, endDate } = req.query;
-      
+
       const events = [];
-      
+
       // Get events from multiple sources
       if (lat && lng) {
         // Ticketmaster events
@@ -170,7 +170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // For authenticated users, add favorite status and sort favorites first
       if ((req as any).userId) {
         const userId = (req as any).userId;
-        
+
         // Add favorite status to each event
         const eventsWithFavorites = await Promise.all(
           filteredEvents.map(async (event) => {
@@ -185,17 +185,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             };
           })
         );
-        
+
         // Sort favorites first, then by start date
         eventsWithFavorites.sort((a, b) => {
           // Favorites first
           if (a.isFavorited && !b.isFavorited) return -1;
           if (!a.isFavorited && b.isFavorited) return 1;
-          
+
           // Then by start date
           return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
         });
-        
+
         filteredEvents = eventsWithFavorites;
       }
 
@@ -240,7 +240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/create-event-payment", requireAuth, async (req: any, res) => {
     try {
       const PLATFORM_FEE = 5.00; // $5 platform fee for hosting events
-      
+
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(PLATFORM_FEE * 100), // Convert to cents
         currency: "usd",
@@ -249,7 +249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: (req as any).userId,
         },
       });
-      
+
       res.json({ 
         clientSecret: paymentIntent.client_secret,
         platformFee: PLATFORM_FEE
@@ -264,11 +264,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = (req.user as any)?.id;
       const { stripePaymentIntentId, ...eventBody } = req.body;
-      
+
       // Verify payment if paymentIntentId is provided
       let isPaid = false;
       let platformFee = 0;
-      
+
       if (stripePaymentIntentId) {
         try {
           const paymentIntent = await stripe.paymentIntents.retrieve(stripePaymentIntentId);
@@ -281,7 +281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Invalid payment" });
         }
       }
-      
+
       // Transform the event data to ensure proper types
       const eventData = insertEventSchema.parse({
         ...eventBody,
@@ -294,14 +294,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         price: Number(eventBody.price) || 0,
         maxAttendees: eventBody.maxAttendees ? Number(eventBody.maxAttendees) : null,
       });
-      
+
       const event = await storage.createEvent(eventData);
       res.json(event);
     } catch (error) {
       console.error("Error creating event:", error);
       console.error("Full error details:", JSON.stringify(error, null, 2));
       console.error("Event body received:", req.body);
-      
+
       if (error && typeof error === 'object' && 'name' in error && error.name === "ZodError") {
         console.error("Zod validation errors:", (error as any).errors);
         return res.status(400).json({ message: "Invalid event data", errors: (error as any).errors });
@@ -324,7 +324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/events/:id/rsvp/guest", async (req, res) => {
     try {
       const { guestName, guestEmail, guestAddress, status } = req.body;
-      
+
       if (!guestName || !guestEmail) {
         return res.status(400).json({ message: "Guest name and email are required" });
       }
@@ -336,7 +336,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         guestAddress,
         status: status || "attending",
       });
-      
+
       const rsvp = await storage.createGuestRsvp(rsvpData);
       res.json(rsvp);
     } catch (error) {
@@ -356,7 +356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
         status: req.body.status || "attending",
       });
-      
+
       const rsvp = await storage.createOrUpdateRsvp(rsvpData);
       res.json(rsvp);
     } catch (error) {
@@ -394,7 +394,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/events/:id/comments/guest", async (req, res) => {
     try {
       const { guestName, guestEmail, content } = req.body;
-      
+
       if (!guestName || !guestEmail || !content) {
         return res.status(400).json({ message: "Guest name, email, and content are required" });
       }
@@ -405,7 +405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         guestEmail,
         content,
       });
-      
+
       const comment = await storage.createComment(commentData);
       res.json(comment);
     } catch (error) {
@@ -425,7 +425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
         content: req.body.content,
       });
-      
+
       const comment = await storage.createComment(commentData);
       res.json(comment);
     } catch (error) {
@@ -491,7 +491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/media/guest", async (req, res) => {
     try {
       const { guestName, guestEmail, eventId, commentId, type, url, filename, fileSize } = req.body;
-      
+
       if (!guestName || !guestEmail || !type || !url) {
         return res.status(400).json({ message: "Guest name, email, type, and URL are required" });
       }
@@ -509,7 +509,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filename,
         fileSize,
       });
-      
+
       const media = await storage.createMedia(mediaData);
       res.json(media);
     } catch (error) {
@@ -538,7 +538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filename,
         fileSize,
       });
-      
+
       const media = await storage.createMedia(mediaData);
       res.json(media);
     } catch (error) {
@@ -556,13 +556,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req.user as any)?.id;
       const eventId = req.params.id;
       const { externalSource } = req.body;
-      
+
       const favoriteData = insertFavoriteSchema.parse({
         userId,
         eventId,
         externalSource,
       });
-      
+
       const favorite = await storage.addFavorite(favoriteData);
       res.json(favorite);
     } catch (error) {
@@ -579,7 +579,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = (req as any).userId;
       const eventId = req.params.id;
       const { externalSource } = req.query;
-      
+
       await storage.removeFavorite(userId, eventId, externalSource as string);
       res.json({ success: true });
     } catch (error) {
@@ -604,7 +604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const subscription = req.body;
       console.log('New push subscription:', subscription);
-      
+
       // In a real app, store subscription in database with user ID
       // For now, just acknowledge the subscription
       res.status(200).json({ message: "Subscription received" });
@@ -618,7 +618,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { endpoint } = req.body;
       console.log('Unsubscribe request for endpoint:', endpoint);
-      
+
       // In a real app, remove subscription from database
       res.status(200).json({ message: "Unsubscribed successfully" });
     } catch (error) {
@@ -631,17 +631,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // In a real app, send actual push notification using web-push library
       console.log('Test notification requested');
-      
+
       // Simulate sending notification
       setTimeout(() => {
         console.log('Test notification would be sent now');
       }, 1000);
-      
+
       res.status(200).json({ message: "Test notification sent" });
     } catch (error) {
       console.error("Error sending test notification:", error);
       res.status(500).json({ message: "Failed to send test notification" });
     }
+  });
+
+  // This GET /api endpoint was previously causing a 404 and contributing to runaway polling
+  app.get("/api", (req, res) => {
+    res.json({ message: "What's the Move API is running!" });
+  });
+
+  app.head("/api", (req, res) => {
+    res.status(200).end();
   });
 
   const httpServer = createServer(app);

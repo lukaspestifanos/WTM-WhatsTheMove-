@@ -234,14 +234,14 @@ export function setupAuth(app: Express) {
   // Passport Local Strategy
   passport.use(
     new LocalStrategy(
-      { 
+      {
         usernameField: "email",
         passReqToCallback: true,
       },
       async (req: Request, email: string, password: string, done) => {
         try {
-          logSecurityEvent('login_attempt', { 
-            email, 
+          logSecurityEvent('login_attempt', {
+            email,
             ip: req.ip,
             userAgent: req.get('User-Agent'),
           });
@@ -255,8 +255,8 @@ export function setupAuth(app: Express) {
 
           const isValidPassword = await comparePasswords(password, user.password);
           if (!isValidPassword) {
-            logSecurityEvent('login_failed_invalid_password', { 
-              email, 
+            logSecurityEvent('login_failed_invalid_password', {
+              email,
               userId: user.id,
               ip: req.ip,
             });
@@ -266,8 +266,8 @@ export function setupAuth(app: Express) {
           // Update last login time
           await storage.updateUserLastLogin(user.id);
 
-          logSecurityEvent('login_success', { 
-            email, 
+          logSecurityEvent('login_success', {
+            email,
             userId: user.id,
             ip: req.ip,
           });
@@ -279,8 +279,8 @@ export function setupAuth(app: Express) {
             lastLoginAt: new Date().toISOString(),
           });
         } catch (error) {
-          logSecurityEvent('login_error', { 
-            email, 
+          logSecurityEvent('login_error', {
+            email,
             error: error instanceof Error ? error.message : 'Unknown error',
             ip: req.ip,
           });
@@ -316,8 +316,8 @@ export function setupAuth(app: Express) {
     try {
       const { email, password, firstName, lastName, university, graduationYear } = req.body;
 
-      logSecurityEvent('registration_attempt', { 
-        email, 
+      logSecurityEvent('registration_attempt', {
+        email,
         ip: req.ip,
         userAgent: req.get('User-Agent'),
       });
@@ -326,7 +326,7 @@ export function setupAuth(app: Express) {
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
         logSecurityEvent('registration_failed_user_exists', { email, ip: req.ip });
-        return res.status(409).json({ 
+        return res.status(409).json({
           error: "An account with this email already exists",
           code: "USER_ALREADY_EXISTS"
         });
@@ -343,8 +343,8 @@ export function setupAuth(app: Express) {
         graduationYear,
       });
 
-      logSecurityEvent('registration_success', { 
-        email, 
+      logSecurityEvent('registration_success', {
+        email,
         userId: user.id,
         ip: req.ip,
       });
@@ -353,9 +353,9 @@ export function setupAuth(app: Express) {
       const { password: _, ...userWithoutPassword } = user;
       req.login(userWithoutPassword, (err) => {
         if (err) {
-          logSecurityEvent('auto_login_after_registration_failed', { 
-            userId: user.id, 
-            error: err.message 
+          logSecurityEvent('auto_login_after_registration_failed', {
+            userId: user.id,
+            error: err.message
           });
           return next(err);
         }
@@ -366,14 +366,14 @@ export function setupAuth(app: Express) {
         });
       });
     } catch (error) {
-      logSecurityEvent('registration_error', { 
+      logSecurityEvent('registration_error', {
         email: req.body.email,
         error: error instanceof Error ? error.message : 'Unknown error',
         ip: req.ip,
       });
 
       console.error("Registration error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to create account. Please try again.",
         code: "REGISTRATION_FAILED"
       });
@@ -385,14 +385,14 @@ export function setupAuth(app: Express) {
     passport.authenticate("local", (err: any, user: Express.User | false, info: any) => {
       if (err) {
         console.error("Login authentication error:", err);
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: "Authentication service error",
           code: "AUTH_SERVICE_ERROR"
         });
       }
 
       if (!user) {
-        return res.status(401).json({ 
+        return res.status(401).json({
           error: info?.message || "Invalid credentials",
           code: "INVALID_CREDENTIALS"
         });
@@ -400,11 +400,11 @@ export function setupAuth(app: Express) {
 
       req.login(user, (err) => {
         if (err) {
-          logSecurityEvent('login_session_error', { 
-            userId: user.id, 
-            error: err.message 
+          logSecurityEvent('login_session_error', {
+            userId: user.id,
+            error: err.message
           });
-          return res.status(500).json({ 
+          return res.status(500).json({
             error: "Failed to establish session",
             code: "SESSION_ERROR"
           });
@@ -424,8 +424,8 @@ export function setupAuth(app: Express) {
 
     req.logout((err) => {
       if (err) {
-        logSecurityEvent('logout_error', { 
-          userId, 
+        logSecurityEvent('logout_error', {
+          userId,
           error: err.message,
           ip: req.ip,
         });
@@ -435,19 +435,19 @@ export function setupAuth(app: Express) {
       // Destroy session
       req.session.destroy((err) => {
         if (err) {
-          logSecurityEvent('session_destroy_error', { 
-            userId, 
-            error: err.message 
+          logSecurityEvent('session_destroy_error', {
+            userId,
+            error: err.message
           });
         } else {
-          logSecurityEvent('logout_success', { 
+          logSecurityEvent('logout_success', {
             userId,
             ip: req.ip,
           });
         }
 
         res.clearCookie('session_id');
-        res.json({ 
+        res.json({
           message: "Logged out successfully",
           success: true
         });
@@ -458,7 +458,7 @@ export function setupAuth(app: Express) {
   // Get current user endpoint with additional security
   app.get("/api/user", (req: AuthRequest, res: Response) => {
     if (!req.isAuthenticated() || !req.user) {
-      return res.status(401).json({ 
+      return res.status(401).json({
         error: "Not authenticated",
         code: "NOT_AUTHENTICATED"
       });
@@ -490,7 +490,7 @@ export function setupAuth(app: Express) {
       // Get user with password
       const user = await storage.getUserWithPassword(userId);
       if (!user) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           error: "User not found",
           code: "USER_NOT_FOUND"
         });
@@ -499,11 +499,11 @@ export function setupAuth(app: Express) {
       // Verify current password
       const isCurrentPasswordValid = await comparePasswords(currentPassword, user.password);
       if (!isCurrentPasswordValid) {
-        logSecurityEvent('password_change_failed_invalid_current', { 
+        logSecurityEvent('password_change_failed_invalid_current', {
           userId,
           ip: req.ip,
         });
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: "Current password is incorrect",
           code: "INVALID_CURRENT_PASSWORD"
         });
@@ -513,24 +513,24 @@ export function setupAuth(app: Express) {
       const hashedNewPassword = await hashPassword(newPassword);
       await storage.updateUserPassword(userId, hashedNewPassword);
 
-      logSecurityEvent('password_change_success', { 
+      logSecurityEvent('password_change_success', {
         userId,
         ip: req.ip,
       });
 
-      res.json({ 
+      res.json({
         message: "Password changed successfully",
         success: true
       });
     } catch (error) {
-      logSecurityEvent('password_change_error', { 
+      logSecurityEvent('password_change_error', {
         userId: req.user?.id,
         error: error instanceof Error ? error.message : 'Unknown error',
         ip: req.ip,
       });
 
       console.error("Password change error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to change password",
         code: "PASSWORD_CHANGE_FAILED"
       });
@@ -541,7 +541,7 @@ export function setupAuth(app: Express) {
 // Enhanced auth middleware
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   if (!req.isAuthenticated() || !req.user) {
-    return res.status(401).json({ 
+    return res.status(401).json({
       error: "Authentication required",
       code: "AUTHENTICATION_REQUIRED"
     });
@@ -558,7 +558,7 @@ export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction
 // Admin role middleware (extend as needed)
 export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
   if (!req.isAuthenticated() || !req.user) {
-    return res.status(401).json({ 
+    return res.status(401).json({
       error: "Authentication required",
       code: "AUTHENTICATION_REQUIRED"
     });
@@ -566,11 +566,11 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
 
   // Add admin check logic here based on your user schema
   if (!(req.user as any).isAdmin) {
-    logSecurityEvent('admin_access_denied', { 
+    logSecurityEvent('admin_access_denied', {
       userId: req.user.id,
       ip: req.ip,
     });
-    return res.status(403).json({ 
+    return res.status(403).json({
       error: "Admin access required",
       code: "ADMIN_ACCESS_REQUIRED"
     });
