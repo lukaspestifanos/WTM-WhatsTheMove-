@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { requireAuth, setupAuth } from "./auth";
 // Removed conflicting JWT auth system
-import { insertEventSchema, insertRsvpSchema, insertFavoriteSchema } from "@shared/schema";
+import { insertEventSchema, insertRsvpSchema, insertFavoriteSchema, insertCommentSchema, insertMediaSchema } from "@shared/schema";
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { ticketmasterService } from "./services/ticketmaster";
