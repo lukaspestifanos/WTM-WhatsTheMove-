@@ -117,36 +117,36 @@ export async function comparePasswords(supplied: string, stored: string): Promis
   }
 }
 
-// Rate limiting configurations
-const createRateLimiter = (windowMs: number, max: number, message: string) =>
+// Rate limiting configurations with proper IP handling
+const createRateLimiter = (windowMs: number, max: number, message: string, skipEmailKey = false) =>
   rateLimit({
     windowMs,
     max,
     message: { error: message },
     standardHeaders: true,
     legacyHeaders: false,
-    // Store failed attempts by IP + email combination for login attempts
-    keyGenerator: (req: Request) => {
-      // Use the built-in helper for proper IPv6 handling
-      const ip = req.ip || req.connection?.remoteAddress || 'unknown';
-      if (req.path === '/api/login' && req.body?.email) {
-        return `${ip}-${req.body.email}`;
-      }
-      return ip;
+    // Skip custom keyGenerator if not needed - let express-rate-limit handle IP properly
+    ...(skipEmailKey ? {} : {
+      keyGenerator: (req: Request) => {
+        // Use express-rate-limit's built-in IP handling for better IPv6 support
+        const ip = req.ip || 'unknown';
+        if (req.path === '/api/login' && req.body?.email) {
+          return `${ip}-${req.body.email}`;
+        }
+        return ip;
+      },
+    }),
+    skip: (req) => {
+      // Skip rate limiting for health checks and HEAD requests
+      return req.method === 'HEAD' || 
+             req.path === '/api/health' || 
+             req.path === '/api' ||
+             req.url === '/api' ||
+             req.url === '/api/health';
     },
   });
 
-const authLimiter = createRateLimiter(
-  15 * 60 * 1000, // 15 minutes
-  CONFIG.MAX_LOGIN_ATTEMPTS,
-  'Too many authentication attempts, please try again later'
-);
-
-const generalLimiter = createRateLimiter(
-  15 * 60 * 1000, // 15 minutes
-  100, // General API limit
-  'Too many requests, please try again later'
-);
+// Rate limiters will be created after trust proxy is configured
 
 // Enhanced auth middleware - Define early to avoid hoisting issues
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
@@ -234,6 +234,24 @@ const createSessionStore = () => {
 };
 
 export function setupAuth(app: Express) {
+  // CRITICAL: Configure trust proxy FIRST - before any IP-dependent middleware
+  if (CONFIG.TRUST_PROXY) {
+    app.set("trust proxy", 1);
+  }
+
+  // Add health check endpoints FIRST - before any middleware that might interfere
+  app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+  
+  // HEAD endpoint to stop the polling storm - ALWAYS return 200
+  app.head('/api', (req, res) => {
+    res.status(200).end();
+  });
+  app.head('/api/health', (req, res) => {
+    res.status(200).end();
+  });
+
   // Security middleware - disable CSP in development to allow Vite HMR
   if (CONFIG.IS_PRODUCTION) {
     app.use(helmet({
@@ -253,35 +271,24 @@ export function setupAuth(app: Express) {
     }));
   }
 
-  // Add health check endpoint BEFORE rate limiting
-  app.get('/api/health', (req, res) => {
-    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
-  });
-  
-  // HEAD endpoint to stop the polling storm - ALWAYS return 200
-  app.head('/api', (req, res) => {
-    res.status(200).end();
-  });
-  app.head('/api/health', (req, res) => {
-    res.status(200).end();
-  });
+  // Create rate limiters AFTER trust proxy is configured
+  const authLimiter = createRateLimiter(
+    15 * 60 * 1000, // 15 minutes
+    CONFIG.MAX_LOGIN_ATTEMPTS,
+    'Too many authentication attempts, please try again later'
+  );
 
-  // Apply rate limiting - exclude HEAD and health endpoints
+  const generalLimiter = createRateLimiter(
+    15 * 60 * 1000, // 15 minutes
+    100, // General API limit
+    'Too many requests, please try again later',
+    true // Skip email key for general limiting
+  );
+
+  // Apply rate limiting AFTER trust proxy is configured and rate limiters are created
   app.use('/api/login', authLimiter);
   app.use('/api/register', authLimiter);
-  
-  // More selective rate limiting - exclude health checks and HEAD requests completely
-  app.use('/api', (req, res, next) => {
-    // Skip rate limiting for HEAD requests, health endpoints, and root API endpoint
-    if (req.method === 'HEAD' || 
-        req.path === '/api/health' || 
-        req.path === '/api' ||
-        req.url === '/api' ||
-        req.url === '/api/health') {
-      return next();
-    }
-    generalLimiter(req, res, next);
-  });
+  app.use('/api', generalLimiter);
 
   // Session configuration
   const sessionSettings: session.SessionOptions = {
@@ -297,10 +304,6 @@ export function setupAuth(app: Express) {
       sameSite: 'lax', // CSRF protection
     },
   };
-
-  if (CONFIG.TRUST_PROXY) {
-    app.set("trust proxy", 1);
-  }
 
   app.use(session(sessionSettings));
   app.use(passport.initialize());
