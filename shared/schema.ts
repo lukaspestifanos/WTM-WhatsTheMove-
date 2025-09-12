@@ -177,6 +177,49 @@ export const friendRequests = pgTable("friend_requests", {
   senderReceiverUnique: unique("friend_requests_sender_receiver_unique").on(table.senderId, table.receiverId),
 }));
 
+// Comments table
+export const comments = pgTable("comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  eventId: uuid("event_id").references(() => events.id, { onDelete: "cascade" }).notNull(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  guestName: varchar("guest_name", { length: NAME_MAX_LENGTH }),
+  guestEmail: varchar("guest_email", { length: EMAIL_MAX_LENGTH }),
+  content: text("content").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+}, (table) => ({
+  eventIdIdx: index("comments_event_id_idx").on(table.eventId),
+  userIdIdx: index("comments_user_id_idx").on(table.userId),
+  createdAtIdx: index("comments_created_at_idx").on(table.createdAt),
+}));
+
+// Media table
+export const media = pgTable("media", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  eventId: uuid("event_id").references(() => events.id, { onDelete: "cascade" }),
+  commentId: uuid("comment_id").references(() => comments.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  guestName: varchar("guest_name", { length: NAME_MAX_LENGTH }),
+  guestEmail: varchar("guest_email", { length: EMAIL_MAX_LENGTH }),
+  type: varchar("type", { length: 20 }).notNull(), // 'image', 'video', 'audio'
+  url: varchar("url", { length: MAX_VARCHAR_LENGTH }).notNull(),
+  filename: varchar("filename", { length: MAX_VARCHAR_LENGTH }),
+  fileSize: integer("file_size"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+    .defaultNow()
+    .notNull(),
+}, (table) => ({
+  eventIdIdx: index("media_event_id_idx").on(table.eventId),
+  commentIdIdx: index("media_comment_id_idx").on(table.commentId),
+  userIdIdx: index("media_user_id_idx").on(table.userId),
+  typeIdx: index("media_type_idx").on(table.type),
+}));
+
 // Event Invitations table
 export const eventInvitations = pgTable("event_invitations", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -292,6 +335,32 @@ export const insertEventInvitationSchema = createInsertSchema(eventInvitations, 
 
 export const selectEventInvitationSchema = createSelectSchema(eventInvitations);
 
+export const insertCommentSchema = createInsertSchema(comments, {
+  content: z.string().min(1, "Content is required").max(MAX_TEXT_LENGTH).trim(),
+  guestEmail: z.string().email("Invalid email address").max(EMAIL_MAX_LENGTH).optional(),
+  guestName: z.string().max(NAME_MAX_LENGTH).trim().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const selectCommentSchema = createSelectSchema(comments);
+
+export const insertMediaSchema = createInsertSchema(media, {
+  type: z.enum(["image", "video", "audio"]),
+  url: z.string().url("Invalid URL").max(MAX_VARCHAR_LENGTH),
+  filename: z.string().max(MAX_VARCHAR_LENGTH).optional(),
+  fileSize: z.number().int().positive().optional(),
+  guestEmail: z.string().email("Invalid email address").max(EMAIL_MAX_LENGTH).optional(),
+  guestName: z.string().max(NAME_MAX_LENGTH).trim().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const selectMediaSchema = createSelectSchema(media);
+
 // Type exports with proper inference
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -313,6 +382,12 @@ export type InsertFriendRequest = z.infer<typeof insertFriendRequestSchema>;
 
 export type EventInvitation = typeof eventInvitations.$inferSelect;
 export type InsertEventInvitation = z.infer<typeof insertEventInvitationSchema>;
+
+export type Comment = typeof comments.$inferSelect;
+export type InsertComment = z.infer<typeof insertCommentSchema>;
+
+export type Media = typeof media.$inferSelect;
+export type InsertMedia = z.infer<typeof insertMediaSchema>;
 
 // Utility types for common queries
 export type EventWithHost = Event & {

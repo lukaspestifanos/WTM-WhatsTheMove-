@@ -1,8 +1,9 @@
-import { 
+import {
   users, events, rsvps, favorites, friendships, friendRequests,
-  type User, type InsertUser, type Event, type InsertEvent, 
+  type User, type InsertUser, type Event, type InsertEvent,
   type Rsvp, type InsertRsvp, type Favorite, type InsertFavorite,
-  type Friendship, type InsertFriendship, type FriendRequest, type InsertFriendRequest
+  type Friendship, type InsertFriendship, type FriendRequest, type InsertFriendRequest,
+  comments, media, type Comment, type InsertComment, type Media, type InsertMedia
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql } from "drizzle-orm";
@@ -14,24 +15,24 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User>;
-  
+
   // Event operations
   searchEventsByLocation(lat: number, lng: number, radius: number, options: any): Promise<Event[]>;
   getEvent(id: string): Promise<Event | undefined>;
   createEvent(event: InsertEvent): Promise<Event>;
   getUserEvents(userId: string): Promise<Event[]>;
-  
+
   // RSVP operations
   getEventRsvps(eventId: string): Promise<Rsvp[]>;
   createGuestRsvp(rsvp: InsertRsvp): Promise<Rsvp>;
   createOrUpdateRsvp(rsvp: InsertRsvp): Promise<Rsvp>;
-  
+
   // Favorite operations
   getUserFavorites(userId: string): Promise<Favorite[]>;
   addFavorite(favorite: InsertFavorite): Promise<Favorite>;
   removeFavorite(userId: string, eventId: string, externalSource?: string): Promise<void>;
   isFavorited(userId: string, eventId: string, externalSource?: string): Promise<boolean>;
-  
+
   // Friend operations
   getUserFriends(userId: string): Promise<User[]>;
   sendFriendRequest(request: InsertFriendRequest): Promise<FriendRequest>;
@@ -39,6 +40,15 @@ export interface IStorage {
   declineFriendRequest(requestId: string): Promise<void>;
   getFriendRequests(userId: string): Promise<FriendRequest[]>;
   searchUsers(query: string, currentUserId: string): Promise<User[]>;
+
+  // Comment operations
+  createComment(data: InsertComment): Promise<Comment>;
+  getEventComments(eventId: string): Promise<Comment[]>;
+  getCommentMedia(commentId: string): Promise<Media[]>;
+
+  // Media operations
+  createMedia(data: InsertMedia): Promise<Media>;
+  getEventMedia(eventId: string): Promise<Media[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -118,13 +128,13 @@ export class DatabaseStorage implements IStorage {
   async searchEventsByLocation(lat: number, lng: number, radius: number, options: any): Promise<Event[]> {
     // Simple query without geo calculations for now
     const query = db.select().from(events);
-    
+
     if (options.category) {
       query.where(eq(events.category, options.category));
     }
-    
+
     const allEvents = await query;
-    
+
     // Filter out past events
     const now = new Date();
     const futureEvents = allEvents.filter(event => {
@@ -136,7 +146,7 @@ export class DatabaseStorage implements IStorage {
         return false;
       }
     });
-    
+
     return futureEvents;
   }
 
@@ -175,14 +185,14 @@ export class DatabaseStorage implements IStorage {
     if (!rsvpData.userId) {
       return this.createGuestRsvp(rsvpData);
     }
-    
+
     const [rsvp] = await db
       .insert(rsvps)
       .values(rsvpData)
       .onConflictDoUpdate({
         target: [rsvps.eventId, rsvps.userId],
         set: {
-          status: rsvpData.status,
+          status: rsvps.status,
         },
       })
       .returning();
@@ -204,13 +214,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removeFavorite(userId: string, eventId: string, externalSource?: string): Promise<void> {
-    const whereClause = and(
-      eq(favorites.userId, userId),
-      eq(favorites.eventId, eventId)
+    let query = db.delete(favorites).where(
+      and(
+        eq(favorites.userId, userId),
+        eq(favorites.eventId, eventId)
+      )
     );
-    // Note: externalSource filtering will be available after database migration
-    
-    await db.delete(favorites).where(whereClause);
+
+    if (externalSource) {
+      query = db.delete(favorites).where(
+        and(
+          eq(favorites.userId, userId),
+          eq(favorites.eventId, eventId),
+          eq(favorites.externalSource, externalSource)
+        )
+      );
+    }
+
+    await query;
   }
 
   async isFavorited(userId: string, eventId: string, externalSource?: string): Promise<boolean> {
@@ -219,7 +240,7 @@ export class DatabaseStorage implements IStorage {
       eq(favorites.eventId, eventId)
     );
     // Note: externalSource filtering will be available after database migration
-    
+
     const [favorite] = await db.select().from(favorites).where(whereClause).limit(1);
     return !!favorite;
   }
@@ -263,8 +284,44 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .limit(20);
-    
+
     return matchingUsers;
+  }
+
+  // Comment methods
+  async createComment(data: InsertComment): Promise<Comment> {
+    const [comment] = await db.insert(comments).values({
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }).returning();
+    return comment;
+  }
+
+  async getEventComments(eventId: string): Promise<Comment[]> {
+    return await db.select().from(comments)
+      .where(and(eq(comments.eventId, eventId), eq(comments.isActive, true)))
+      .orderBy(sql`${comments.createdAt} DESC`);
+  }
+
+  async getCommentMedia(commentId: string): Promise<Media[]> {
+    return await db.select().from(media)
+      .where(eq(media.commentId, commentId));
+  }
+
+  // Media methods
+  async createMedia(data: InsertMedia): Promise<Media> {
+    const [mediaItem] = await db.insert(media).values({
+      ...data,
+      createdAt: new Date().toISOString(),
+    }).returning();
+    return mediaItem;
+  }
+
+  async getEventMedia(eventId: string): Promise<Media[]> {
+    return await db.select().from(media)
+      .where(eq(media.eventId, eventId))
+      .orderBy(sql`${media.createdAt} DESC`);
   }
 }
 

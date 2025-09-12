@@ -6,6 +6,7 @@ import { requireAuth, setupAuth } from "./auth";
 import { insertEventSchema, insertRsvpSchema, insertFavoriteSchema, insertCommentSchema, insertMediaSchema } from "@shared/schema";
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import rateLimit from 'express-rate-limit';
 import { ticketmasterService } from "./services/ticketmaster";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import Stripe from "stripe";
@@ -18,7 +19,23 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Rate limiting middleware
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // Limit each IP to 1000 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const searchLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 30, // Limit search requests to 30 per minute
+    message: 'Too many search requests, please try again later.',
+  });
+
   // Basic middleware
+  app.use(limiter);
   app.use(cors({
     origin: process.env.CLIENT_URL || 'http://localhost:5173',
     credentials: true,
@@ -78,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Events routes (public access)
-  app.get("/api/events/search", async (req, res) => {
+  app.get("/api/events/search", searchLimiter, async (req, res) => {
     try {
       const { lat, lng, radius = 50, category, keyword, startDate, endDate } = req.query;
       
