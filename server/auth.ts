@@ -269,9 +269,14 @@ export function setupAuth(app: Express) {
   app.use('/api/login', authLimiter);
   app.use('/api/register', authLimiter);
   
-  // More selective rate limiting - exclude health checks
+  // More selective rate limiting - exclude health checks and HEAD requests completely
   app.use('/api', (req, res, next) => {
-    if (req.path === '/api/health' || req.path === '/api' || req.method === 'HEAD') {
+    // Skip rate limiting for HEAD requests, health endpoints, and root API endpoint
+    if (req.method === 'HEAD' || 
+        req.path === '/api/health' || 
+        req.path === '/api' ||
+        req.url === '/api' ||
+        req.url === '/api/health') {
       return next();
     }
     generalLimiter(req, res, next);
