@@ -124,10 +124,12 @@ const createRateLimiter = (windowMs: number, max: number, message: string) =>
     legacyHeaders: false,
     // Store failed attempts by IP + email combination for login attempts
     keyGenerator: (req: Request) => {
+      // Use the built-in helper for proper IPv6 handling
+      const ip = req.ip || req.connection.remoteAddress || 'unknown';
       if (req.path === '/api/login' && req.body?.email) {
-        return `${req.ip}-${req.body.email}`;
+        return `${ip}-${req.body.email}`;
       }
-      return req.ip;
+      return ip;
     },
   });
 
