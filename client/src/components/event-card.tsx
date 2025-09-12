@@ -171,24 +171,15 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
 
   const rsvpMutation = useMutation({
     mutationFn: async () => {
-      if (event.externalSource && event.url) {
-        if (event.externalSource === 'ticketmaster') {
-          openTicketmasterApp(event.url);
-        } else {
-          window.open(event.url, "_blank");
-        }
-        return;
-      }
+      // RSVP always calls the API regardless of external source
       return await apiRequest("POST", `/api/events/${event.id}/rsvp`, { status: "attending" });
     },
     onSuccess: () => {
-      if (!event.externalSource) {
-        toast({
-          title: "RSVP Success",
-          description: "You've successfully RSVP'd to this event!",
-        });
-        queryClient.invalidateQueries({ queryKey: ["/api/events/search"] });
-      }
+      toast({
+        title: "RSVP Success",
+        description: "You've successfully RSVP'd to this event!",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/search"] });
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {
@@ -198,7 +189,7 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "/auth";
         }, 500);
         return;
       }
@@ -214,18 +205,7 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
   const handleRsvp = (e: React.MouseEvent) => {
     e.stopPropagation();
     
-    // For external events (Ticketmaster, etc.), open ticket URL directly - no login required
-    if (event.externalSource && event.url) {
-      // Open external ticket URL in new tab - completely separate from RSVP system
-      window.open(event.url, '_blank');
-      toast({
-        title: "Redirecting to tickets",
-        description: "Opening ticket website in new tab",
-      });
-      return;
-    }
-    
-    // For user-created events, require authentication for RSVP
+    // RSVP functionality - always requires authentication for ANY event
     if (!user) {
       toast({
         title: "Please log in",
@@ -238,7 +218,7 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
       return;
     }
     
-    // Use RSVP system only for user-created events
+    // Use RSVP system for all events (internal and external)
     rsvpMutation.mutate();
   };
 
@@ -351,76 +331,116 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
         </div>
       </div>
       
-      <div className="flex items-center justify-between mt-4">
+      <div className="mt-4 space-y-3">
         {event.externalSource ? (
-          // External events: Show "Get Tickets" as a simple external link
-          <a 
-            href={event.url} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 px-6 rounded-xl font-semibold text-center transition-colors shadow-lg"
-            data-testid={`link-tickets-${event.id}`}
-          >
-            {formatPriceDisplay(event, "Get Tickets")} →
-          </a>
+          <>
+            {/* External events: Simple ticket link - NO RSVP functionality */}
+            <a 
+              href={event.url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="block w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-6 rounded-xl font-semibold text-center transition-colors shadow-lg"
+              data-testid={`link-tickets-${event.id}`}
+            >
+              {formatPriceDisplay(event, "Get Tickets")} →
+            </a>
+            
+            {/* Separate RSVP button for external events */}
+            <div className="flex items-center justify-between">
+              <Button 
+                onClick={handleRsvp}
+                disabled={rsvpMutation.isPending}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-semibold shadow-lg"
+                data-testid={`button-rsvp-${event.id}`}
+              >
+                {rsvpMutation.isPending ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Loading...
+                  </>
+                ) : (
+                  "RSVP"
+                )}
+              </Button>
+              
+              <div className="flex space-x-2 ml-3">
+                {user && (
+                  <Button
+                    onClick={handleFavoriteClick}
+                    variant="secondary"
+                    disabled={favoriteMutation.isPending || unfavoriteMutation.isPending}
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                      event.isFavorited 
+                        ? 'bg-red-100 hover:bg-red-200 text-red-600 border-red-200' 
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-600 border-gray-200'
+                    }`}
+                    data-testid={`button-favorite-${event.id}`}
+                  >
+                    <Heart 
+                      className={`w-4 h-4 ${event.isFavorited ? 'fill-current' : ''}`} 
+                    />
+                  </Button>
+                )}
+                <Button 
+                  onClick={handleShare}
+                  variant="secondary"
+                  className="w-12 h-12 rounded-xl flex items-center justify-center"
+                  data-testid={`button-share-${event.id}`}
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </>
         ) : (
-          // User events: Show "RSVP" button
-          <Button 
-            onClick={handleRsvp}
-            disabled={rsvpMutation.isPending}
-            className="flex-1 bg-primary text-primary-foreground py-3 rounded-xl font-semibold shadow-lg"
-            data-testid={`button-rsvp-${event.id}`}
-          >
-            {rsvpMutation.isPending ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                Loading...
-              </>
-            ) : (
-              formatPriceDisplay(event, "RSVP")
-            )}
-          </Button>
-        )}
-        
-        <div className="flex space-x-2 ml-3">
-          {!event.externalSource && user && (
-            <Button
+          // User events: Only RSVP functionality
+          <div className="flex items-center justify-between">
+            <Button 
               onClick={handleRsvp}
-              variant="secondary"
               disabled={rsvpMutation.isPending}
-              className="w-12 h-12 rounded-xl flex items-center justify-center bg-green-100 hover:bg-green-200 text-green-600 border-green-200"
-              data-testid={`button-rsvp-icon-${event.id}`}
-              title="RSVP to this event"
+              className="flex-1 bg-primary text-primary-foreground py-3 rounded-xl font-semibold shadow-lg"
+              data-testid={`button-rsvp-${event.id}`}
             >
-              <i className="fas fa-calendar-check w-4 h-4"></i>
+              {rsvpMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Loading...
+                </>
+              ) : (
+                formatPriceDisplay(event, "RSVP")
+              )}
             </Button>
-          )}
-          {user && (
-            <Button
-              onClick={handleFavoriteClick}
-              variant="secondary"
-              disabled={favoriteMutation.isPending || unfavoriteMutation.isPending}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                event.isFavorited 
-                  ? 'bg-red-100 hover:bg-red-200 text-red-600 border-red-200' 
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-600 border-gray-200'
-              }`}
-              data-testid={`button-favorite-${event.id}`}
-            >
-              <Heart 
-                className={`w-4 h-4 ${event.isFavorited ? 'fill-current' : ''}`} 
-              />
-            </Button>
-          )}
-          <Button 
-            onClick={handleShare}
-            variant="secondary"
-            className="w-12 h-12 rounded-xl flex items-center justify-center"
-            data-testid={`button-share-${event.id}`}
-          >
-            <Send className="w-4 h-4" />
-          </Button>
-        </div>
+            
+            <div className="flex space-x-2 ml-3">
+              {user && (
+                <Button
+                  onClick={handleFavoriteClick}
+                  variant="secondary"
+                  disabled={favoriteMutation.isPending || unfavoriteMutation.isPending}
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    event.isFavorited 
+                      ? 'bg-red-100 hover:bg-red-200 text-red-600 border-red-200' 
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600 border-gray-200'
+                  }`}
+                  data-testid={`button-favorite-${event.id}`}
+                >
+                  <Heart 
+                    className={`w-4 h-4 ${event.isFavorited ? 'fill-current' : ''}`} 
+                  />
+                </Button>
+              )}
+              <Button 
+                onClick={handleShare}
+                variant="secondary"
+                className="w-12 h-12 rounded-xl flex items-center justify-center"
+                data-testid={`button-share-${event.id}`}
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   );
