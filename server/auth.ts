@@ -11,7 +11,8 @@ import { storage } from "./storage";
 import { User as UserType } from "@shared/schema";
 
 // Fix the MemoryStore import
-const MemoryStore = require("memorystore")(session);
+import MemoryStoreFactory from "memorystore";
+const MemoryStore = MemoryStoreFactory(session);
 
 // Enhanced types
 declare global {
