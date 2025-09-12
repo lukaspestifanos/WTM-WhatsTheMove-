@@ -214,22 +214,31 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
   const handleRsvp = (e: React.MouseEvent) => {
     e.stopPropagation();
     
-    // For external events (Ticketmaster, etc.), allow guest access - no login required
+    // For external events (Ticketmaster, etc.), open ticket URL directly - no login required
     if (event.externalSource && event.url) {
-      rsvpMutation.mutate();
-      return;
-    }
-    
-    // For user-created events, require authentication
-    if (!isAuthenticated) {
+      // Open external ticket URL in new tab - completely separate from RSVP system
+      window.open(event.url, '_blank');
       toast({
-        title: "Please log in",
-        description: "You need to be logged in to RSVP",
-        variant: "destructive",
+        title: "Redirecting to tickets",
+        description: "Opening ticket website in new tab",
       });
       return;
     }
     
+    // For user-created events, require authentication for RSVP
+    if (!user) {
+      toast({
+        title: "Please log in",
+        description: "You need to be logged in to RSVP to this event",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/auth";
+      }, 1000);
+      return;
+    }
+    
+    // Use RSVP system only for user-created events
     rsvpMutation.mutate();
   };
 
@@ -343,24 +352,49 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
       </div>
       
       <div className="flex items-center justify-between mt-4">
-        <Button 
-          onClick={handleRsvp}
-          disabled={rsvpMutation.isPending}
-          className="flex-1 bg-primary text-primary-foreground py-3 rounded-xl font-semibold mr-3 shadow-lg"
-          data-testid={`button-rsvp-${event.id}`}
-        >
-          {rsvpMutation.isPending ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-              Loading...
-            </>
-          ) : event.externalSource ? (
-            formatPriceDisplay(event, "Get Tickets")
-          ) : (
-            formatPriceDisplay(event, "RSVP")
+        {event.externalSource ? (
+          // External events: Show "Get Tickets" as a simple external link
+          <a 
+            href={event.url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 px-6 rounded-xl font-semibold text-center transition-colors shadow-lg"
+            data-testid={`link-tickets-${event.id}`}
+          >
+            {formatPriceDisplay(event, "Get Tickets")} →
+          </a>
+        ) : (
+          // User events: Show "RSVP" button
+          <Button 
+            onClick={handleRsvp}
+            disabled={rsvpMutation.isPending}
+            className="flex-1 bg-primary text-primary-foreground py-3 rounded-xl font-semibold shadow-lg"
+            data-testid={`button-rsvp-${event.id}`}
+          >
+            {rsvpMutation.isPending ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                Loading...
+              </>
+            ) : (
+              formatPriceDisplay(event, "RSVP")
+            )}
+          </Button>
+        )}
+        
+        <div className="flex space-x-2 ml-3">
+          {!event.externalSource && user && (
+            <Button
+              onClick={handleRsvp}
+              variant="secondary"
+              disabled={rsvpMutation.isPending}
+              className="w-12 h-12 rounded-xl flex items-center justify-center bg-green-100 hover:bg-green-200 text-green-600 border-green-200"
+              data-testid={`button-rsvp-icon-${event.id}`}
+              title="RSVP to this event"
+            >
+              <i className="fas fa-calendar-check w-4 h-4"></i>
+            </Button>
           )}
-        </Button>
-        <div className="flex space-x-2">
           {user && (
             <Button
               onClick={handleFavoriteClick}
