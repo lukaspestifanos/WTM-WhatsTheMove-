@@ -60,6 +60,7 @@ interface ProcessedEvent {
   externalId: string;
   externalSource: "ticketmaster";
   venueName?: string;
+  url: string; // Main URL field for frontend
   ticketUrl: string;
   webUrl: string;
   mobileAppUrl?: string;
@@ -502,6 +503,7 @@ class TicketmasterService {
       externalId: event.id,
       externalSource: "ticketmaster" as const,
       venueName: venue?.name,
+      url: urls.ticketUrl, // Main URL field that frontend expects
       ticketUrl: urls.ticketUrl,
       webUrl: urls.webUrl,
       mobileAppUrl: urls.mobileAppUrl,
