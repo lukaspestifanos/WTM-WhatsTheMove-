@@ -139,9 +139,16 @@ export default function Home() {
 
 
   const handleEventClick = (eventId: string) => {
-    // Always navigate to internal event details page
-    // Users can access external links from the details page if needed
-    setLocation(`/events/${eventId}`);
+    // Find the event to get its URL for external links
+    const event = events.find(e => e.id === eventId);
+    
+    if (event && event.externalSource && event.url) {
+      // Open external event link directly (Ticketmaster, etc.)
+      window.open(event.url, '_blank', 'noopener,noreferrer');
+    } else {
+      // For user-created events, navigate to internal event details page
+      setLocation(`/events/${eventId}`);
+    }
   };
 
   const handleCenterOnLocation = () => {
