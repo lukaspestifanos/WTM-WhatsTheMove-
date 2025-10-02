@@ -121,17 +121,6 @@ export default function Home() {
       const data = await response.json();
       console.log('Frontend received events:', data.events?.length || 0);
       return data;
-    },
-    onError: (error) => {
-      console.error('Query error:', error);
-      // Don't show toast for every error, only critical ones
-      if (error.message.includes('500')) {
-        toast({
-          title: "Server Error",
-          description: "Unable to load events. Please try again later.",
-          variant: "destructive",
-        });
-      }
     }
   });
 
@@ -140,7 +129,7 @@ export default function Home() {
 
   const handleEventClick = (eventId: string) => {
     // Find the event to get its URL for external links
-    const event = events.find(e => e.id === eventId);
+    const event = events.find((e: Event) => e.id === eventId);
     
     if (event && event.externalSource && event.url) {
       // Open external event link directly (Ticketmaster, etc.)

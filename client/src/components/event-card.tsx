@@ -254,32 +254,10 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
     }
   };
 
-  const openTicketmasterApp = (url: string) => {
-    try {
-      // Try to open Ticketmaster app using direct deep link
-      const appUrl = url.replace('https://www.ticketmaster.com', 'ticketmaster://');
-      
-      // Try direct navigation first
-      window.location.href = appUrl;
-      
-      // Fallback to web after a delay if app doesn't open
-      setTimeout(() => {
-        window.open(url, "_blank");
-      }, 2000);
-    } catch (error) {
-      // If anything fails, just open the web URL
-      window.open(url, "_blank");
-    }
-  };
-
   const handleCardClick = () => {
-    // For external events (Ticketmaster), try to open in app first
+    // For external events, open URL directly in new tab
     if (event.externalSource && event.url) {
-      if (event.externalSource === 'ticketmaster') {
-        openTicketmasterApp(event.url);
-      } else {
-        window.open(event.url, "_blank");
-      }
+      window.open(event.url, "_blank", "noopener,noreferrer");
       return;
     }
     // For user events, go to event details page

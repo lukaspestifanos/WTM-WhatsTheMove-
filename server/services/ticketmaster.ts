@@ -92,66 +92,39 @@ class TicketmasterService {
     }
   }
 
-  // Mobile app detection utility
-  private isMobile(): boolean {
-    if (typeof navigator === 'undefined') return false;
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  }
-
-  private isIOS(): boolean {
-    if (typeof navigator === 'undefined') return false;
-    return /iPad|iPhone|iPod/.test(navigator.userAgent);
-  }
-
-  private isAndroid(): boolean {
-    if (typeof navigator === 'undefined') return false;
-    return /Android/.test(navigator.userAgent);
-  }
-
-  // Enhanced URL generation for better mobile app integration
+  // FIXED: Improved URL generation with working fallback
   private generateTicketUrls(event: TicketmasterEvent): {
     ticketUrl: string;
     webUrl: string;
     mobileAppUrl?: string;
   } {
-    const eventId = event.id;
-    const baseWebUrl = `https://www.ticketmaster.com/event/${eventId}`;
-
-    // Clean and validate the original URL
+    // Clean and validate the original URL from Ticketmaster API
     let originalUrl = event.url;
     if (originalUrl && !originalUrl.startsWith('http')) {
       originalUrl = 'https://' + originalUrl;
     }
 
-    // Generate mobile app deep links
-    let mobileAppUrl: string | undefined;
-
-    if (this.isMobile()) {
-      if (this.isIOS()) {
-        // iOS Universal Link (preferred) or custom scheme fallback
-        mobileAppUrl = `https://ticketmaster.onelink.me/nWTH?pid=app&af_web_dp=${encodeURIComponent(baseWebUrl)}&af_ios_url=${encodeURIComponent(baseWebUrl)}`;
-      } else if (this.isAndroid()) {
-        // Android Intent URL with fallback
-        mobileAppUrl = `intent://event/${eventId}#Intent;package=com.ticketmaster.mobile.android.na;scheme=https;S.browser_fallback_url=${encodeURIComponent(baseWebUrl)};end`;
-      }
+    // If we have a valid Ticketmaster URL from API, use it
+    if (originalUrl && this.isValidTicketmasterUrl(originalUrl)) {
+      return {
+        ticketUrl: originalUrl,
+        webUrl: originalUrl,
+        mobileAppUrl: undefined,
+      };
     }
 
-    // Primary ticket URL logic:
-    // 1. Use mobile app URL if on mobile and available
-    // 2. Use original API URL if it looks valid
-    // 3. Fall back to constructed web URL
-    let primaryUrl = baseWebUrl;
+    // FIXED: Use search fallback instead of broken /event/{id} URL
+    const eventName = encodeURIComponent(event.name.replace(/[^a-zA-Z0-9\s]/g, '').trim());
+    const fallbackUrl = `https://www.ticketmaster.com/search?q=${eventName}`;
 
-    if (mobileAppUrl) {
-      primaryUrl = mobileAppUrl;
-    } else if (originalUrl && this.isValidTicketmasterUrl(originalUrl)) {
-      primaryUrl = originalUrl;
+    if (this.debugMode) {
+      console.warn(`Using fallback search URL for event: ${event.name}`);
     }
 
     return {
-      ticketUrl: primaryUrl,
-      webUrl: originalUrl && this.isValidTicketmasterUrl(originalUrl) ? originalUrl : baseWebUrl,
-      mobileAppUrl,
+      ticketUrl: fallbackUrl,
+      webUrl: fallbackUrl,
+      mobileAppUrl: undefined,
     };
   }
 
@@ -174,102 +147,6 @@ class TicketmasterService {
     }
   }
 
-  // Method to handle event clicks and open appropriate URL
-  public openEventUrl(event: ProcessedEvent): void {
-    if (this.debugMode) {
-      console.log("Opening event:", event.title);
-      console.log("Primary URL:", event.ticketUrl);
-      console.log("Web fallback:", event.webUrl);
-      console.log("Mobile app URL:", event.mobileAppUrl);
-    }
-
-    // Try mobile app first on mobile devices
-    if (this.isMobile() && event.mobileAppUrl) {
-      this.tryOpenMobileApp(event);
-    } else {
-      // Open web URL directly
-      this.openWebUrl(event.webUrl);
-    }
-  }
-
-  private tryOpenMobileApp(event: ProcessedEvent): void {
-    if (!event.mobileAppUrl) {
-      this.openWebUrl(event.webUrl);
-      return;
-    }
-
-    const startTime = Date.now();
-    let hasAppOpened = false;
-
-    // Create a hidden iframe to attempt app opening (for iOS)
-    if (this.isIOS()) {
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = event.mobileAppUrl;
-      document.body.appendChild(iframe);
-
-      // Clean up iframe after attempt
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-      }, 2000);
-
-      // Check if app opened by monitoring page visibility
-      const checkAppOpened = () => {
-        if (Date.now() - startTime > 3000) {
-          if (!hasAppOpened) {
-            console.log("App didn't open, falling back to web");
-            this.openWebUrl(event.webUrl);
-          }
-          return;
-        }
-
-        if (document.hidden || document.webkitHidden) {
-          hasAppOpened = true;
-          console.log("App opened successfully");
-          return;
-        }
-
-        setTimeout(checkAppOpened, 500);
-      };
-
-      setTimeout(checkAppOpened, 1000);
-    } else if (this.isAndroid()) {
-      // Android: use window.location with intent URL
-      try {
-        window.location.href = event.mobileAppUrl;
-
-        // Fallback timer in case app doesn't open
-        setTimeout(() => {
-          if (!hasAppOpened) {
-            this.openWebUrl(event.webUrl);
-          }
-        }, 3000);
-      } catch (error) {
-        console.log("Mobile app opening failed, using web fallback");
-        this.openWebUrl(event.webUrl);
-      }
-    } else {
-      // Not mobile, use web URL
-      this.openWebUrl(event.webUrl);
-    }
-  }
-
-  private openWebUrl(url: string): void {
-    try {
-      // Open in new tab/window
-      const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
-
-      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-        // Popup blocked, try direct navigation
-        console.log("Popup blocked, trying direct navigation");
-        window.location.href = url;
-      }
-    } catch (error) {
-      console.error("Failed to open URL:", error);
-      // Last resort: try direct navigation
-      window.location.href = url;
-    }
-  }
 
   async searchEventsByLocation(
     latitude: number,
@@ -561,8 +438,3 @@ export const ticketmasterService = new TicketmasterService();
 
 // Export for testing purposes
 export { TicketmasterService };
-
-// Utility function for components to use
-export const openTicketmasterEvent = (event: ProcessedEvent) => {
-  ticketmasterService.openEventUrl(event);
-};
