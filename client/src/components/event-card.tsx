@@ -255,18 +255,17 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
   };
 
   const handleCardClick = () => {
-    // For external events, open URL directly in new tab
+    // For external events with a valid URL, don't handle card clicks (let the Get Tickets button handle it)
     if (event.externalSource && event.url) {
-      window.open(event.url, "_blank", "noopener,noreferrer");
       return;
     }
-    // For user events, go to event details page
+    // For external events without a URL or user events, go to event details page
     onEventClick(event.id);
   };
 
   return (
     <Card 
-      className="bg-white/90 backdrop-blur-lg border-white/20 p-4 rounded-2xl shadow-lg cursor-pointer hover:shadow-xl transition-shadow"
+      className={`bg-white/90 backdrop-blur-lg border-white/20 p-4 rounded-2xl shadow-lg transition-shadow ${!event.externalSource || !event.url ? 'cursor-pointer hover:shadow-xl' : ''}`}
       onClick={handleCardClick}
       data-testid={`card-event-${event.id}`}
     >
@@ -317,7 +316,12 @@ export default function EventCard({ event, onEventClick }: EventCardProps) {
               href={event.url} 
               target="_blank" 
               rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                // Only stop propagation if we have a valid URL to navigate to
+                if (event.url) {
+                  e.stopPropagation();
+                }
+              }}
               className="block w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-6 rounded-xl font-semibold text-center transition-colors shadow-lg"
               data-testid={`link-tickets-${event.id}`}
             >
