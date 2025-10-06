@@ -40,6 +40,7 @@ interface Event {
   price?: number;
   imageUrl?: string;
   externalSource?: string;
+  externalId?: string;
   url?: string;
 }
 
@@ -355,6 +356,46 @@ export default function EventDetails() {
     }
   }, [isAuthenticated]);
 
+  const handleGetTickets = useCallback(() => {
+    if (!event?.url) {
+      toast({
+        title: "Link Unavailable",
+        description: "Ticket link is not available for this event",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Log for debugging
+    console.log('🎫 Opening ticket link:', event.url);
+    console.log('🎫 Event source:', event.externalSource);
+    console.log('🎫 Event ID:', event.id);
+    console.log('🎫 External ID:', event.externalId);
+
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (isMobile && event.externalSource === 'ticketmaster') {
+      // Try to open Ticketmaster mobile app first
+      const eventId = event.externalId || event.id;
+      const appDeepLink = `tmevent://event?id=${eventId}`;
+
+      console.log('📱 Attempting to open app:', appDeepLink);
+
+      // Try app deep link
+      window.location.href = appDeepLink;
+
+      // Fallback to web URL after 1.5 seconds if app doesn't open
+      setTimeout(() => {
+        console.log('🌐 Fallback to web:', event.url);
+        window.open(event.url, '_blank', 'noopener,noreferrer');
+      }, 1500);
+    } else {
+      // Desktop or non-Ticketmaster - just open web URL
+      console.log('🌐 Opening web URL:', event.url);
+      window.open(event.url, '_blank', 'noopener,noreferrer');
+    }
+  }, [event, toast]);
+
   // Loading state
   if (isLoading) {
     return (
@@ -516,7 +557,7 @@ export default function EventDetails() {
           {event.externalSource && event.url ? (
             <Button 
               className="w-full bg-primary text-primary-foreground py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-shadow"
-              onClick={() => window.open(event.url, "_blank", "noopener,noreferrer")}
+              onClick={handleGetTickets}
             >
               {event.price && event.price > 0 ? `Get Tickets - $${event.price}` : "Get Tickets"}
               <ExternalLink className="w-5 h-5 ml-2" />
